@@ -1,0 +1,102 @@
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..6fc7937 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -634,11 +634,28 @@ class grade_report_grader extends grade_report {
+ 
+         $rowclasses = array('even', 'odd');
+ 
++        if($this->get_pref('repeatheaders') > 0) {
++            $repeat = $this->get_pref('repeatheaders');
++        } else {
++            $repeat = $this->get_pref('repeatheaders') + 100000;
++        }
++
++        // Repeat filler
++        $repeatentries = unserialize(serialize($rows));
++        array_shift($repeatentries);
++
+         $suspendedstring = null;
+         foreach ($this->users as $userid => $user) {
++            if ($this->rowcount > 0 and $this->rowcount % $repeat == 0) {
++                $rows = array_merge($rows, unserialize(serialize($repeatentries)));
++            }
++
++            $this->rowcount++;
++
+             $userrow = new html_table_row();
+             $userrow->id = 'fixed_user_'.$userid;
+-            $userrow->attributes['class'] = 'r'.$this->rowcount++.' '.$rowclasses[$this->rowcount % 2];
++            $userrow->attributes['class'] = $rowclasses[$this->rowcount % 2];
++
+ 
+             $usercell = new html_table_cell();
+             $usercell->attributes['class'] = 'user';
+@@ -836,8 +853,23 @@ class grade_report_grader extends grade_report {
+ 
+         $rowclasses = array('even', 'odd');
+ 
++        if($this->get_pref('repeatheaders') > 0) {
++            $repeat = $this->get_pref('repeatheaders');
++        } else {
++            $repeat = $this->get_pref('repeatheaders') + 100000;
++        }
++
++        // Headers to repeat
++        $repeatentries = unserialize(serialize($rows));
++        array_shift($repeatentries);
++
++
+         foreach ($this->users as $userid => $user) {
+ 
++            if ($this->rowcount > 0 and $this->rowcount % $repeat == 0) {
++                $rows = array_merge($rows, $repeatentries);
++            }
++
+             if ($this->canviewhidden) {
+                 $altered = array();
+                 $unknown = array();
+@@ -848,6 +880,7 @@ class grade_report_grader extends grade_report {
+                 unset($hidingaffected);
+             }
+ 
++            $this->rowcount++;
+             $itemrow = new html_table_row();
+             $itemrow->id = 'user_'.$userid;
+             $itemrow->attributes['class'] = $rowclasses[$this->rowcount % 2];
+diff --git a/grade/report/grader/preferences_form.php b/grade/report/grader/preferences_form.php
+index ba2cb24..6fbd64d 100644
+--- a/grade/report/grader/preferences_form.php
++++ b/grade/report/grader/preferences_form.php
+@@ -102,6 +102,7 @@ class grader_report_preferences_form extends moodleform {
+             if (has_capability('moodle/course:viewsuspendedusers', $context)) {
+                 $preferences['prefgeneral']['showonlyactiveenrol'] = $checkbox_default;
+             }
++            $preferences['prefgeneral']['repeatheaders'] = 'text';
+             $preferences['prefgeneral']['aggregationposition'] = array(GRADE_REPORT_PREFERENCE_DEFAULT => '*default*',
+                                                                        GRADE_REPORT_AGGREGATION_POSITION_FIRST => get_string('positionfirst', 'grades'),
+                                                                        GRADE_REPORT_AGGREGATION_POSITION_LAST => get_string('positionlast', 'grades'));
+diff --git a/grade/report/grader/settings.php b/grade/report/grader/settings.php
+index d1b02af..49a257a 100644
+--- a/grade/report/grader/settings.php
++++ b/grade/report/grader/settings.php
+@@ -38,6 +38,9 @@ if ($ADMIN->fulltree) {
+     $settings->add(new admin_setting_configcheckbox('grade_report_showonlyactiveenrol', get_string('showonlyactiveenrol', 'grades'),
+                                                 get_string('showonlyactiveenrol_help', 'grades'), 1));
+ 
++    $settings->add(new admin_setting_configtext('grade_report_repeatheaders', get_string('repeatheaders', 'grades'),
++                                            get_string('repeatheaders_help', 'grades'), 10));
++
+     $settings->add(new admin_setting_configcheckbox('grade_report_quickgrading', get_string('quickgrading', 'grades'),
+                                                 get_string('quickgrading_help', 'grades'), 1));
+ 
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..d510190 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -703,3 +703,5 @@ $string['writinggradebookinfo'] = 'Writing gradebook settings';
+ $string['xml'] = 'XML';
+ $string['yes'] = 'Yes';
+ $string['yourgrade'] = 'Your grade';
++$string['repeatheaders'] = 'Repeat Headers';
++$string['repeatheaders_help'] = 'Repeat gradebook headers after this many rows.<br />Enter 0 to disable this feature.<br />Leave blank to use the site defaults.';

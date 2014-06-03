@@ -1,0 +1,98 @@
+diff --git a/admin/settings/grades.php b/admin/settings/grades.php
+index 6d12d99..dcae382 100644
+--- a/admin/settings/grades.php
++++ b/admin/settings/grades.php
+@@ -135,6 +135,16 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+         $temp->add(new admin_setting_configselect('grade_displaytype', new lang_string('gradedisplaytype', 'grades'),
+                                                   new lang_string('gradedisplaytype_help', 'grades'), GRADE_DISPLAY_TYPE_REAL, $display_types));
+ 
++        $temp->add(new admin_setting_configcheckbox('grade_item_manual_recompute',
++            new lang_string('gradeitemmanualrecompute', 'grades'),
++            new lang_string('gradeitemmanualrecompute_help', 'grades'), 0));
++
++        if ($CFG->grade_item_manual_recompute) {
++            $temp->add(new admin_setting_configcheckbox('manipulate_categories',
++                new lang_string('manipulatecategories', 'grades'),
++                new lang_string('manipulatecategories_help', 'grades'), 0));
++        }
++
+         $temp->add(new admin_setting_configselect('grade_decimalpoints', new lang_string('decimalpoints', 'grades'),
+                                                   new lang_string('decimalpoints_help', 'grades'), 2,
+                                                   array( '0' => '0',
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..0c72a34 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -945,6 +945,12 @@ class grade_report_grader extends grade_report {
+ 
+                 } else if ($USER->gradeediting[$this->courseid]) {
+ 
++                    // Editing means user edit manual item raw
++                    if ($item->is_manual_item() and $CFG->grade_item_manual_recompute) {
++                        $gradeval = $grade->rawgrade;
++                    }
++
++
+                     if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
+                         $scale = $scalesarray[$item->scaleid];
+                         $gradeval = (int)$gradeval; // scales use only integers
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..2d8858a 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -689,6 +689,8 @@ $string['verbosescales'] = 'Verbose scales';
+ $string['viewbygroup'] = 'Group';
+ $string['viewgrades'] = 'View grades';
+ $string['warningexcludedsum'] = 'Warning: excluding of grades is not compatible with sum aggregation.';
++$string['manipulatecategories'] = 'Manipulate category totals';
++$string['manipulatecategories_help'] = 'Curve and offset category totals';
+ $string['weight'] = 'weight';
+ $string['weightcourse'] = 'Use weighted grades for course';
+ $string['weightedascending'] = 'Sort by weighted percent ascending';
+@@ -700,6 +702,8 @@ $string['weights'] = 'Weights';
+ $string['weightsedit'] = 'Edit weights and extra credits';
+ $string['weightuc'] = 'Weight';
+ $string['writinggradebookinfo'] = 'Writing gradebook settings';
++$string['gradeitemmanualrecompute'] = 'Manual item recompute';
++$string['gradeitemmanualrecompute_help'] = 'Allow the gradebook to automatically adjust the raw grade boundaries when editing the real grade boundaries for Manual items.<br /><strong>When enabled, you will have the option of manipulating category totals.';
+ $string['xml'] = 'XML';
+ $string['yes'] = 'Yes';
+ $string['yourgrade'] = 'Your grade';
+diff --git a/lib/grade/grade_item.php b/lib/grade/grade_item.php
+index 3f8b273..2626d04 100644
+--- a/lib/grade/grade_item.php
++++ b/lib/grade/grade_item.php
+@@ -702,6 +702,14 @@ class grade_item extends grade_object {
+                     continue;
+                 }
+ 
++                // Manual item rawgrade might be recomputed
++                if ($this->is_manual_item() and $CFG->grade_item_manual_recompute) {
++                    $maxscale = ($this->grademax / $grade->rawgrademax);
++                    $grade->rawgrademax = $this->grademax;
++                    $grade->rawgrademin = $this->grademin;
++                    $grade->rawgrade = $this->bounded_grade($grade->rawgrade);
++                }
++
+                 $grade->finalgrade = $this->adjust_raw_grade($grade->rawgrade, $grade->rawgrademin, $grade->rawgrademax);
+ 
+                 if (grade_floats_different($grade_record->finalgrade, $grade->finalgrade)) {
+@@ -967,7 +975,17 @@ class grade_item extends grade_object {
+      * @return bool
+      */
+     public function is_raw_used() {
+-        return ($this->is_external_item() and !$this->is_calculated() and !$this->is_outcome_item());
++        global $CFG;
++        if($CFG->manipulate_categories) {
++            $manipulatable_item = ($this->is_category_item() or $this->is_course_item());
++        } else {
++            $manipulatable_item = NULL;
++        }
++        if($CFG->grade_item_manual_recompute) {
++            return ($this->is_manual_item() or $this->is_external_item() or $manipulatable_item and !$this->is_calculated() and !$this->is_outcome_item());
++        } else {
++            return ($this->is_external_item() and !$this->is_calculated() and !$this->is_outcome_item());
++        }
+     }
+ 
+     /**

@@ -1,0 +1,409 @@
+diff --git a/admin/settings/grades.php b/admin/settings/grades.php
+index 6d12d99..3cbf507 100644
+--- a/admin/settings/grades.php
++++ b/admin/settings/grades.php
+@@ -132,6 +132,10 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+     /// Grade item settings
+     $temp = new admin_settingpage('gradeitemsettings', new lang_string('gradeitemsettings', 'grades'), 'moodle/grade:manage');
+     if ($ADMIN->fulltree) {
++        $temp->add(new admin_setting_configcheckbox('grade_multfactor_alt',
++            new lang_string('multfactor_alt', 'grades'),
++            new lang_string('multfactor_alt_desc', 'grades'), 0));
++
+         $temp->add(new admin_setting_configselect('grade_displaytype', new lang_string('gradedisplaytype', 'grades'),
+                                                   new lang_string('gradedisplaytype_help', 'grades'), GRADE_DISPLAY_TYPE_REAL, $display_types));
+ 
+diff --git a/grade/edit/tree/category.php b/grade/edit/tree/category.php
+index 852fdd5..1b0030f 100644
+--- a/grade/edit/tree/category.php
++++ b/grade/edit/tree/category.php
+@@ -52,6 +52,8 @@ $returnurl = $gpr->get_return_url('index.php?id='.$course->id);
+ 
+ $heading = get_string('categoryedit', 'grades');
+ 
++$curve_to = get_config('moodle', 'grade_multfactor_alt');
++
+ if ($id) {
+     if (!$grade_category = grade_category::fetch(array('id'=>$id, 'courseid'=>$course->id))) {
+         print_error('invalidcategory');
+@@ -98,6 +100,17 @@ if ($id) {
+     }
+ }
+ 
++$multfactor = $grade_item->multfactor;
++$curve_decimals = 4;
++$decimalpoints = $grade_item->get_decimals();
++
++if ($curve_to) {
++    $curve_decimals = $decimalpoints;
++    $multfactor *= $category->grade_item_grademax;
++}
++
++$category->grade_item_multfactor = format_float($multfactor, $curve_decimals);
++
+ $mform = new edit_category_form(null, array('current'=>$category, 'gpr'=>$gpr));
+ 
+ if ($mform->is_cancelled()) {
+@@ -167,6 +180,17 @@ if ($mform->is_cancelled()) {
+         }
+     }
+ 
++    // Special handling of curve-to
++    if ($curve_to) {
++        if (empty($itemdata->multfactor) || $itemdata->multfactor <= 0.0000) {
++            $itemdata->multfactor = 1.0000;
++        } else if (!isset($data->curve_to) and isset($grade_item->multfactor)) {
++            $itemdata->multfactor = $grade_item->multfactor;
++        } else {
++            $itemdata->multfactor = $itemdata->multfactor / $itemdata->grademax;
++        }
++    }
++
+     // When creating a new category, a number of grade item fields are filled out automatically, and are required.
+     // If the user leaves these fields empty during creation of a category, we let the default values take effect
+     // Otherwise, we let the user-entered grade item values take effect
+diff --git a/grade/edit/tree/category_form.php b/grade/edit/tree/category_form.php
+index ec2db5f..e7d18f3 100644
+--- a/grade/edit/tree/category_form.php
++++ b/grade/edit/tree/category_form.php
+@@ -178,6 +178,41 @@ class edit_category_form extends moodleform {
+         $mform->disabledIf('grade_item_gradepass', 'grade_item_gradetype', 'eq', GRADE_TYPE_NONE);
+         $mform->disabledIf('grade_item_gradepass', 'grade_item_gradetype', 'eq', GRADE_TYPE_TEXT);
+ 
++        if (get_config('moodle', 'grade_multfactor_alt')) {
++            $curve_to = get_string('multfactor_alt', 'grades');
++            $perform_curve = get_string('allow_multfactor_alt', 'grades');
++
++            $mform->addElement('checkbox', 'curve_to', $perform_curve,'');
++
++            $mform->setAdvanced('curve_to');
++
++            $mform->addElement('text', 'grade_item_multfactor', $curve_to);
++            $mform->setType('grade_item_multfactor', PARAM_FLOAT);
++
++            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_NONE);
++            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_TEXT);
++
++            $mform->disabledIf('grade_item_multfactor', 'curve_to', 'notchecked');
++            $mform->addHelpButton(
++                'grade_item_multfactor', 'multfactor_alt',
++                'grades', null
++            );
++        } else {
++            $mform->addElement('text', 'grade_item_multfactor', get_string('multfactor', 'grades'));
++            $mform->addHelpButton('grade_item_multfactor', 'grade_item_multfactor', 'grades');
++        }
++
++        $mform->setAdvanced('grade_item_multfactor');
++        $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
++        $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
++
++        $mform->addElement('text', 'grade_item_plusfactor', get_string('plusfactor', 'grades'));
++        $mform->setType('grade_item_plusfactor', PARAM_FLOAT);
++        $mform->addHelpButton('grade_item_plusfactor', 'plusfactor', 'grades');
++        $mform->setAdvanced('grade_item_plusfactor');
++        $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
++        $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
++
+         /// grade display prefs
+         $default_gradedisplaytype = grade_get_setting($COURSE->id, 'displaytype', $CFG->grade_displaytype);
+         $options = array(GRADE_DISPLAY_TYPE_DEFAULT            => get_string('default', 'grades'),
+diff --git a/grade/edit/tree/functions.js b/grade/edit/tree/functions.js
+index 5649ea2..531512b 100644
+--- a/grade/edit/tree/functions.js
++++ b/grade/edit/tree/functions.js
+@@ -69,6 +69,61 @@ function update_category_aggregation(e, args) {
+     window.location = 'index.php?id='+args.courseid+'&category='+args.category+'&aggregationtype='+selectmenu.get('value')+'&sesskey='+args.sesskey;
+ }
+ 
++YUI().use("node-base", function(Y)
++{
++    function add_grademax_change_listeners(){
++        Y.all('.grademax').on('change', function(ev)
++            {
++                var node    = ev.target;
++                var id      = node.get('name');
++                var regex   = new RegExp('grademax_([0-9]+)');
++                var matcher = regex.exec(id);
++                var gradeId = matcher[1] || false;
++                var curveTo = gradeId ? Y.one("#multfactor"+gradeId) : null;
++
++                if(curveTo != null){
++                    var storedMult  = curveTo.getData("multfactor"+gradeId);
++                    var newGrMax    = parseFloat(node.get("value"));
++
++                    if(typeof storedMult !== "undefined"){
++                        curveTo.setAttribute("value", storedMult*newGrMax);
++                    }
++                }
++            }
++        );
++    }
++
++    function compute_multfactors(){
++        Y.all('.grademax').each(function(node, index)
++            {
++                var id      = node.get('name');
++                var regex   = new RegExp('grademax_([0-9]+)');
++                var matcher = regex.exec(id);
++                var gradeId = matcher[1] || false;
++                var curveTo = gradeId ? Y.one("#multfactor"+gradeId) : null;
++
++                if(curveTo != null){
++                    var crveVal = parseFloat(curveTo.get("value"));
++                    var grMax   = parseFloat(node.get("value"));
++                    var mFactor = crveVal/grMax;
++
++                    curveTo.setData("multfactor"+gradeId, mFactor);
++                }
++
++            }
++        );
++    };
++
++    function setup_curveto(){
++        compute_multfactors();
++        add_grademax_change_listeners();
++    };
++
++    Y.on(
++        "domready",
++        setup_curveto()
++    );
++});
+ 
+ /* TODO: finish and rewrite for YUI3...
+ Y.YUI2.namespace('grade_edit_tree');
+@@ -244,4 +299,4 @@ Y.YUI2.namespace('grade_edit_tree');
+     });
+     // Y.YUI2.util.Event.onDOMReady(gretree.DDApp.init, gretree.DDApp, true); // Uncomment this line when dragdrop is fully implemented
+ })();
+-*/
+\ No newline at end of file
++*/
+diff --git a/grade/edit/tree/index.php b/grade/edit/tree/index.php
+index e48643d..ff747a6 100644
+--- a/grade/edit/tree/index.php
++++ b/grade/edit/tree/index.php
+@@ -226,6 +226,8 @@ if ($current_view != '') {
+ //Ideally we could do the updates through $grade_edit_tree to avoid recreating it
+ $recreatetree = false;
+ 
++$curve_to = get_config('moodle', 'grade_multfactor_alt');
++
+ if ($data = data_submitted() and confirm_sesskey()) {
+     // Perform bulk actions first
+     if (!empty($data->bulkmove)) {
+@@ -269,6 +271,10 @@ if ($data = data_submitted() and confirm_sesskey()) {
+ 
+             $grade_item = grade_item::fetch(array('id'=>$aid, 'courseid'=>$courseid));
+ 
++            if ($param === 'multfactor' and $curve_to) {
++                $value = $value / $grade_item->grademax;
++            }
++
+             if ($param === 'grademax' and $value < $grade_item->grademin) {
+                 // better not allow values lower than grade min
+                 $value = $grade_item->grademin;
+diff --git a/grade/edit/tree/item.php b/grade/edit/tree/item.php
+index 7acf2eb..fc3c90f 100644
+--- a/grade/edit/tree/item.php
++++ b/grade/edit/tree/item.php
+@@ -52,6 +52,8 @@ $returnurl = $gpr->get_return_url('index.php?id='.$course->id);
+ 
+ $heading = get_string('itemsedit', 'grades');
+ 
++$curve_to = get_config('moodle', 'grade_multfactor_alt');
++
+ if ($grade_item = grade_item::fetch(array('id'=>$id, 'courseid'=>$courseid))) {
+     // redirect if outcomeid present
+     if (!empty($grade_item->outcomeid) && !empty($CFG->enableoutcomes)) {
+@@ -86,10 +88,18 @@ if ($item->hidden > 1) {
+ 
+ $item->locked = !empty($item->locked);
+ 
++$multfactor = $item->multfactor;
++$curve_decimals = 4;
++
++if ($curve_to) {
++    $curve_decimals = $decimalpoints;
++    $multfactor *= $item->grademax;
++}
++
+ $item->grademax        = format_float($item->grademax, $decimalpoints);
+ $item->grademin        = format_float($item->grademin, $decimalpoints);
+ $item->gradepass       = format_float($item->gradepass, $decimalpoints);
+-$item->multfactor      = format_float($item->multfactor, 4);
++$item->multfactor      = format_float($multfactor, $curve_decimals);
+ $item->plusfactor      = format_float($item->plusfactor, 4);
+ 
+ if ($parent_category->aggregation == GRADE_AGGREGATE_SUM or $parent_category->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN2) {
+@@ -139,6 +149,17 @@ if ($mform->is_cancelled()) {
+         }
+     }
+ 
++    // Special handling of curve to
++    if ($curve_to) {
++        if (empty($data->multfactor) || $data->multfactor <= 0.0000) {
++            $data->multfactor = 1.0000;
++        } else if (!isset($data->curve_to) and isset($item->multfactor)) {
++            $data->multfactor = $grade_item->multfactor;
++        } else {
++            $data->multfactor = $data->multfactor / $data->grademax;
++        }
++    }
++
+     $grade_item = new grade_item(array('id'=>$id, 'courseid'=>$courseid));
+     grade_item::set_properties($grade_item, $data);
+     $grade_item->outcomeid = null;
+diff --git a/grade/edit/tree/item_form.php b/grade/edit/tree/item_form.php
+index 67c7a20..91bc540 100644
+--- a/grade/edit/tree/item_form.php
++++ b/grade/edit/tree/item_form.php
+@@ -101,8 +101,25 @@ class edit_item_form extends moodleform {
+         $mform->disabledIf('gradepass', 'gradetype', 'eq', GRADE_TYPE_TEXT);
+         $mform->setType('gradepass', PARAM_RAW);
+ 
+-        $mform->addElement('text', 'multfactor', get_string('multfactor', 'grades'));
+-        $mform->addHelpButton('multfactor', 'multfactor', 'grades');
++        if (get_config('moodle', 'grade_multfactor_alt')) {
++            $curve_to = get_string('multfactor_alt', 'grades');
++            $perform_curve = get_string('allow_multfactor_alt', 'grades');
++
++            $mform->addElement('checkbox', 'curve_to', $perform_curve,'');
++
++            $mform->setAdvanced('curve_to');
++
++            $mform->addElement('text', 'multfactor', $curve_to);
++
++            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_NONE);
++            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_TEXT);
++
++            $mform->disabledIf('multfactor', 'curve_to', 'notchecked');
++            $mform->addHelpButton('multfactor', 'multfactor_alt', 'grades', null);
++        } else {
++            $mform->addElement('text', 'multfactor', get_string('multfactor', 'grades'));
++            $mform->addHelpButton('multfactor', 'multfactor', 'grades');
++        }
+         $mform->setAdvanced('multfactor');
+         $mform->disabledIf('multfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
+         $mform->disabledIf('multfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
+@@ -230,6 +247,9 @@ class edit_item_form extends moodleform {
+             if (!$grade_item->is_raw_used()) {
+                 $mform->removeElement('plusfactor');
+                 $mform->removeElement('multfactor');
++                if ($mform->elementExists('curve_to')) {
++                    $mform->removeElement('curve_to');
++                }
+             }
+ 
+             if ($grade_item->is_outcome_item()) {
+@@ -305,7 +325,7 @@ class edit_item_form extends moodleform {
+             }
+ 
+         } else {
+-            // all new items are manual, children of course category
++            // all new items don't need these options
+             $mform->removeElement('plusfactor');
+             $mform->removeElement('multfactor');
+         }
+diff --git a/grade/edit/tree/lib.php b/grade/edit/tree/lib.php
+index c05eb92..101e807 100644
+--- a/grade/edit/tree/lib.php
++++ b/grade/edit/tree/lib.php
+@@ -793,6 +793,8 @@ class grade_edit_tree_column_range extends grade_edit_tree_column {
+     public function get_item_cell($item, $params) {
+         global $DB, $OUTPUT;
+ 
++        $this->curve_to = get_config('moodle', 'grade_multfactor_alt');
++
+         // If the parent aggregation is Sum of Grades, we should show the number, even for scales, as that value is used...
+         // ...in the computation. For text grades, the grademax is not used, so we can still show the no value string.
+         $parent_cat = $item->get_parent_category();
+@@ -812,9 +814,15 @@ class grade_edit_tree_column_range extends grade_edit_tree_column {
+         } elseif ($item->is_external_item()) {
+             $grademax = format_float($item->grademax, $item->get_decimals());
+         } else {
+-            $grademax = '<label class="accesshide" for="grademax'.$item->id.'">'.get_string('grademax', 'grades').'</label>
+-                <input type="text" size="6" id="grademax'.$item->id.'" name="grademax_'.$item->id.'" value="'.
+-                format_float($item->grademax, $item->get_decimals()).'" />';
++            if ($this->curve_to) {
++                $grademax = '<label class="accesshide" for="grademax'.$item->id.'">'.get_string('grademax', 'grades').'</label>
++                    <input type="text" size="6" id="grademax'.$item->id.'" class="grademax" name="grademax_'.$item->id.'" value="'.
++                    format_float($item->grademax, $item->get_decimals()).'" />';
++            } else {
++                $grademax = '<label class="accesshide" for="grademax'.$item->id.'">'.get_string('grademax', 'grades').'</label>
++                    <input type="text" size="6" id="grademax'.$item->id.'" name="grademax_'.$item->id.'" value="'.
++                    format_float($item->grademax, $item->get_decimals()).'" />';
++            }
+         }
+ 
+         $itemcell = clone($this->itemcell);
+@@ -1033,15 +1041,18 @@ class grade_edit_tree_column_keephigh extends grade_edit_tree_column_category {
+ }
+ 
+ class grade_edit_tree_column_multfactor extends grade_edit_tree_column {
++    private $curve_to;
+ 
+     public function __construct($params) {
++        $this->curve_to = get_config('moodle', 'grade_multfactor_alt');
+         parent::__construct();
+     }
+ 
+     public function get_header_cell() {
+         global $OUTPUT;
+         $headercell = clone($this->headercell);
+-        $headercell->text = get_string('multfactor', 'grades').$OUTPUT->help_icon('multfactor', 'grades');
++        $name = $this->curve_to ? 'multfactor_alt' : 'multfactor';
++        $headercell->text = get_string($name, 'grades').$OUTPUT->help_icon($name, 'grades');
+         return $headercell;
+     }
+ 
+@@ -1060,12 +1071,30 @@ class grade_edit_tree_column_multfactor extends grade_edit_tree_column {
+             $itemcell->text = '&nbsp;';
+             return $itemcell;
+         }
+-        $multfactor = '<label class="accesshide" for="multfactor'.$item->id.'">'.
+-                get_string('multfactorvalue', 'grades', $item->itemname).'</label>
+-                <input type="text" size="4" id="multfactor'.$item->id.'" name="multfactor_'.$item->id.'" value="'.
+-                grade_edit_tree::format_number($item->multfactor).'" />';
++        $size = 4;
++        $multfactor = $item->multfactor;
++
++        $params = array(
++            'type' => 'text',
++            'id' => 'multfactor'.$item->id,
++            'name' => 'multfactor_'.$item->id
++        );
++
++        if ($this->curve_to) {
++            $decimals = $item->get_decimals();
++            $size += $decimals;
++            $multfactor = format_float(($multfactor * $item->grademax), $decimals);
++            $params['class'] = 'curving';
++        } else {
++            $multfactor = grade_edit_tree::format_number($multfactor);
++        }
++
++        $params += array('size' => $size, 'value' => $multfactor);
++
++        $multfactor = html_writer::empty_tag('input', $params);
++
++        $itemcell->text .= $multfactor;
+ 
+-        $itemcell->text = $multfactor;
+         return $itemcell;
+     }
+ 
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..2762723 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -703,3 +703,7 @@ $string['writinggradebookinfo'] = 'Writing gradebook settings';
+ $string['xml'] = 'XML';
+ $string['yes'] = 'Yes';
+ $string['yourgrade'] = 'Your grade';
++$string['allow_multfactor_alt'] = 'Perform Curve To';
++$string['multfactor_alt'] = 'Curve To';
++$string['multfactor_alt_desc'] = 'Curve To will replace the Multiplicator element on the grade item edit form. Users will instead enter a value to _Curve To_ and the Multiplicator is applied under the covers.';
++$string['multfactor_alt_help'] = 'The curve to is the value by which all the grades for this grade item will be adjusted. For example, if the curve-to is 200, and the maximum grade is 100, then all grades are adjusted by multiplying all the grades by 2.';

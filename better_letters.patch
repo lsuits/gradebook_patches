@@ -1,0 +1,316 @@
+diff --git a/admin/settings/grades.php b/admin/settings/grades.php
+index 6d12d99..8c37ee8 100644
+--- a/admin/settings/grades.php
++++ b/admin/settings/grades.php
+@@ -175,9 +175,34 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+         $outcomes = new admin_externalpage('outcomes', new lang_string('outcomes', 'grades'), $CFG->wwwroot.'/grade/edit/outcome/index.php', 'moodle/grade:manage');
+         $ADMIN->add('grades', $outcomes);
+     }
+-    $letters = new admin_externalpage('letters', new lang_string('letters', 'grades'), $CFG->wwwroot.'/grade/edit/letter/index.php', 'moodle/grade:manageletters');
++
++    $letters_str = new lang_string('letters', 'grades');
++    $letters_base = $CFG->wwwroot.'/grade/edit/letter';
++    $letters = new admin_externalpage('letters', $letters_str, $letters_base . '/index.php', 'moodle/grade:manageletters');
++
+     $ADMIN->add('grades', $letters);
+ 
++    $letters_settings_str = new lang_string('letter', 'grades') . ' ' . new lang_string('edit') . ' ' . new lang_string('settings');
++    $temp = new admin_settingpage('letterssettings', $letters_settings_str, 'moodle/grade:manageletters');
++    if ($ADMIN->fulltree) {
++        $temp->add(new admin_setting_configcheckbox('grade_letters_custom',
++            new lang_string('letterscustompercents', 'grades'), new lang_string('letterscustompercents_help', 'grades'), 0));
++
++        $temp->add(new admin_setting_configcheckbox('grade_letters_strict',
++            new lang_string('lettersstrictletter', 'grades'), new lang_string('lettersstrictletter_help', 'grades'), 0));
++
++        $params = array('courseid' => 0);
++
++        $db_scales = $DB->get_records_menu('scale', $params, '', 'id, name');
++
++        $scales = array(0 => new lang_string('lettersdefaultletters', 'grades')) + $db_scales;
++
++        $temp->add(new admin_setting_configselect('grade_letters_names',
++            new lang_string('lettersnames', 'grades'),
++            new lang_string('lettersname_help', 'grades'), 0, $scales));
++    }
++    $ADMIN->add('grades', $temp);
++
+     // The plugins must implement a settings.php file that adds their admin settings to the $settings object
+ 
+     // Reports
+diff --git a/grade/edit/letter/edit_form.php b/grade/edit/letter/edit_form.php
+index baa4087..e7a4559 100644
+--- a/grade/edit/letter/edit_form.php
++++ b/grade/edit/letter/edit_form.php
+@@ -31,6 +31,8 @@ require_once $CFG->libdir.'/formslib.php';
+ class edit_letter_form extends moodleform {
+ 
+     public function definition() {
++	global $DB;
++
+         $mform =& $this->_form;
+         $num   = $this->_customdata['num'];
+         $admin = $this->_customdata['admin'];
+@@ -46,16 +48,38 @@ class edit_letter_form extends moodleform {
+         $gradeletter       = get_string('gradeletter', 'grades');
+         $gradeboundary     = get_string('gradeboundary', 'grades');
+ 
+-        $percentages = array(-1 => get_string('unused', 'grades'));
++        $unused_str = get_string('unused', 'grades');
++
++        $percentages = array(-1 => $unused_str);
+         for ($i=100; $i > -1; $i--) {
+             $percentages[$i] = "$i %";
+         }
+ 
++        $custom = get_config('moodle', 'grade_letters_custom');
++        $strict = get_config('moodle', 'grade_letters_strict');
++
++        $default = get_config('moodle', 'grade_letters_names');
++
++        if ($default and $scale = $DB->get_record('scale', array('id' => $default))) {
++            $default_letters = $scale->scale;
++        } else {
++            $default_letters = get_string('lettersdefaultletters', 'grades');
++        }
++
++        $default_letters = array_reverse(explode(',', $default_letters));
++        $letters = array('' => get_string('unused', 'grades')) +
++            array_combine($default_letters, $default_letters);
++
+         for($i=1; $i<$num+1; $i++) {
+             $gradelettername = 'gradeletter'.$i;
+             $gradeboundaryname = 'gradeboundary'.$i;
+ 
+-            $mform->addElement('text', $gradelettername, $gradeletter." $i");
++            if ($strict) {
++                $mform->addElement('select', $gradelettername, $gradeletter." $i", $letters);
++            } else {
++                $mform->addElement('text', $gradelettername, $gradeletter." $i");
++            }
++
+             if ($i == 1) {
+                 $mform->addHelpButton($gradelettername, 'gradeletter', 'grades');
+             }
+@@ -63,15 +87,31 @@ class edit_letter_form extends moodleform {
+ 
+             if (!$admin) {
+                 $mform->disabledIf($gradelettername, 'override', 'notchecked');
+-                $mform->disabledIf($gradelettername, $gradeboundaryname, 'eq', -1);
++
++                if ($custom) {
++                    $mform->disabledIf($gradeboundaryname, $gradelettername, 'eq', '');
++                } else {
++                    $mform->disabledIf($gradelettername, $gradeboundaryname, 'eq', -1);
++                }
++            }
++
++            if ($custom) {
++                $mform->addElement('text', $gradeboundaryname, $gradeboundary." $i");
++
++                $mform->addRule($gradeboundaryname, null, 'numeric', '', 'client');
++
++                $mform->setType($gradeboundaryname, PARAM_FLOAT);
++                $mform->setDefault($gradeboundaryname, '');
++            } else {
++                $mform->addElement('select', $gradeboundaryname, $gradeboundary." $i", $percentages);
++
++                $mform->setType($gradeboundaryname, PARAM_INT);
++                $mform->setDefault($gradeboundaryname, -1);
+             }
+ 
+-            $mform->addElement('select', $gradeboundaryname, $gradeboundary." $i", $percentages);
+             if ($i == 1) {
+                 $mform->addHelpButton($gradeboundaryname, 'gradeboundary', 'grades');
+             }
+-            $mform->setDefault($gradeboundaryname, -1);
+-            $mform->setType($gradeboundaryname, PARAM_INT);
+ 
+             if (!$admin) {
+                 $mform->disabledIf($gradeboundaryname, 'override', 'notchecked');
+diff --git a/grade/edit/letter/index.php b/grade/edit/letter/index.php
+index d0dc35a..8e587f0 100644
+--- a/grade/edit/letter/index.php
++++ b/grade/edit/letter/index.php
+@@ -44,6 +44,9 @@ if (!$edit) {
+     require_capability('moodle/grade:manageletters', $context);
+ }
+ 
++$custom = (bool) get_config('moodle', 'grade_letters_custom');
++$decimals = $custom ? (int) get_config('moodle', 'grade_decimalpoints') : 2;
++
+ $returnurl = null;
+ $editparam = null;
+ if ($context->contextlevel == CONTEXT_SYSTEM or $context->contextlevel == CONTEXT_COURSECAT) {
+@@ -65,6 +68,12 @@ if ($context->contextlevel == CONTEXT_SYSTEM or $context->contextlevel == CONTEX
+     $returnurl = $CFG->wwwroot.'/grade/edit/letter/index.php?id='.$context->id;
+     $editparam = '&edit=1';
+ 
++    if ($custom) {
++        $item = grade_item::fetch(array('itemtype' => 'course', 'courseid' => $course->id));
++
++        $decimals = $item ? $item->get_decimals() : $decimals;
++    }
++
+     $gpr = new grade_plugin_return(array('type'=>'edit', 'plugin'=>'letter', 'courseid'=>$course->id));
+ } else {
+     print_error('invalidcourselevel');
+@@ -80,15 +89,14 @@ $num = count($letters) + 3;
+ if (!$edit) {
+ 
+     $data = array();
+-
+     $max = 100;
+     foreach($letters as $boundary=>$letter) {
+         $line = array();
+-        $line[] = format_float($max,2).' %';
+-        $line[] = format_float($boundary,2).' %';
++        $line[] = format_float($max, $decimals).' %';
++        $line[] = format_float($boundary, $decimals).' %';
+         $line[] = format_string($letter);
+         $data[] = $line;
+-        $max = $boundary - 0.01;
++        $max = $boundary - (1 / pow(10, $decimals));
+     }
+ 
+     print_grade_page_head($COURSE->id, 'letter', 'view', get_string('gradeletters', 'grades'));
+@@ -99,9 +107,9 @@ if (!$edit) {
+ 
+     $table = new html_table();
+     $table->head  = array(get_string('max', 'grades'), get_string('min', 'grades'), get_string('letter', 'grades'));
+-    $table->size  = array('30%', '30%', '40%');
++    $table->size  = array('33%', '33%', '34%');
+     $table->align = array('left', 'left', 'left');
+-    $table->width = '30%';
++    $table->width = '40%';
+     $table->data  = $data;
+     $table->tablealign  = 'center';
+     echo html_writer::table($table);
+@@ -119,7 +127,7 @@ if (!$edit) {
+         $gradeboundaryname = 'gradeboundary'.$i;
+ 
+         $data->$gradelettername   = $letter;
+-        $data->$gradeboundaryname = $boundary;
++        $data->$gradeboundaryname = $custom ? format_float($boundary, $decimals) : (int) $boundary;
+         $i++;
+     }
+     $data->override = $DB->record_exists('grade_letters', array('contextid' => $context->id));
+@@ -146,30 +154,32 @@ if (!$edit) {
+                 if ($letter == '') {
+                     continue;
+                 }
+-                $letters[$data->$gradeboundaryname] = $letter;
++                $stored = $custom ? "{$data->$gradeboundaryname}" : $data->$gradeboundaryname;
++                $letters[$stored] = $letter;
+             }
+         }
+         krsort($letters, SORT_NUMERIC);
+ 
+-        $old_ids = array();
+-        if ($records = $DB->get_records('grade_letters', array('contextid' => $context->id), 'lowerboundary ASC', 'id')) {
+-            $old_ids = array_keys($records);
+-        }
++        $records = $DB->get_records('grade_letters', array('contextid' => $context->id), 'lowerboundary ASC', 'id');
+ 
+         foreach($letters as $boundary=>$letter) {
+-            $record = new stdClass();
+-            $record->letter        = $letter;
+-            $record->lowerboundary = $boundary;
+-            $record->contextid     = $context->id;
+-
+-            if ($old_id = array_pop($old_ids)) {
+-                $record->id = $old_id;
+-                $DB->update_record('grade_letters', $record);
++            $params = array(
++                'letter' => $letter,
++                'lowerboundary' => $boundary,
++                'contextid' => $context->id
++            );
++
++            if ($record = $DB->get_record('grade_letters', $params)) {
++                unset($records[$record->id]);
++                continue;
+             } else {
++                $record = (object) $params;
+                 $DB->insert_record('grade_letters', $record);
+             }
+         }
+ 
++        $old_ids = array_keys($records);
++
+         foreach($old_ids as $old_id) {
+             $DB->delete_records('grade_letters', array('id' => $old_id));
+         }
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..e18d9ac 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -703,3 +703,10 @@ $string['writinggradebookinfo'] = 'Writing gradebook settings';
+ $string['xml'] = 'XML';
+ $string['yes'] = 'Yes';
+ $string['yourgrade'] = 'Your grade';
++$string['letterscustompercents'] = 'Custom Percentages';
++$string['letterscustompercents_help'] = 'Allows for users to enter a value for the percents.';
++$string['lettersdefaultletters'] = 'F,D,C,B,A';
++$string['lettersstrictletter'] = 'Strict Letter names';
++$string['lettersstrictletter_help'] = 'This setting forces the default letter names defined with the selected Letter names.';
++$string['lettersnames'] = 'Letter names';
++$string['lettersname_help'] = 'This setting forces the default letter names defined with this system scale. __Note__: The default letter names are A-F.';
+diff --git a/lib/gradelib.php b/lib/gradelib.php
+index 75a6f20..531f275 100644
+--- a/lib/gradelib.php
++++ b/lib/gradelib.php
+@@ -694,7 +694,7 @@ function grade_format_gradevalue($value, &$grade_item, $localized=true, $display
+             return grade_format_gradevalue_percentage($value, $grade_item, $decimals, $localized);
+ 
+         case GRADE_DISPLAY_TYPE_LETTER:
+-            return grade_format_gradevalue_letter($value, $grade_item);
++            return grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized);
+ 
+         case GRADE_DISPLAY_TYPE_REAL_PERCENTAGE:
+             return grade_format_gradevalue_real($value, $grade_item, $decimals, $localized) . ' (' .
+@@ -702,23 +702,23 @@ function grade_format_gradevalue($value, &$grade_item, $localized=true, $display
+ 
+         case GRADE_DISPLAY_TYPE_REAL_LETTER:
+             return grade_format_gradevalue_real($value, $grade_item, $decimals, $localized) . ' (' .
+-                    grade_format_gradevalue_letter($value, $grade_item) . ')';
++                    grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized) . ')';
+ 
+         case GRADE_DISPLAY_TYPE_PERCENTAGE_REAL:
+             return grade_format_gradevalue_percentage($value, $grade_item, $decimals, $localized) . ' (' .
+                     grade_format_gradevalue_real($value, $grade_item, $decimals, $localized) . ')';
+ 
+         case GRADE_DISPLAY_TYPE_LETTER_REAL:
+-            return grade_format_gradevalue_letter($value, $grade_item) . ' (' .
++            return grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized) . ' (' .
+                     grade_format_gradevalue_real($value, $grade_item, $decimals, $localized) . ')';
+ 
+         case GRADE_DISPLAY_TYPE_LETTER_PERCENTAGE:
+-            return grade_format_gradevalue_letter($value, $grade_item) . ' (' .
++            return grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized) . ' (' .
+                     grade_format_gradevalue_percentage($value, $grade_item, $decimals, $localized) . ')';
+ 
+         case GRADE_DISPLAY_TYPE_PERCENTAGE_LETTER:
+             return grade_format_gradevalue_percentage($value, $grade_item, $decimals, $localized) . ' (' .
+-                    grade_format_gradevalue_letter($value, $grade_item) . ')';
++                    grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized) . ')';
+         default:
+             return '';
+     }
+@@ -775,7 +775,7 @@ function grade_format_gradevalue_percentage($value, $grade_item, $decimals, $loc
+  * @param object $grade_item Grade item object
+  * @return string
+  */
+-function grade_format_gradevalue_letter($value, $grade_item) {
++function grade_format_gradevalue_letter($value, $grade_item, $decimals, $localized) {
+     $context = context_course::instance($grade_item->courseid, IGNORE_MISSING);
+     if (!$letters = grade_get_letters($context)) {
+         return ''; // no letters??
+@@ -787,6 +787,7 @@ function grade_format_gradevalue_letter($value, $grade_item) {
+ 
+     $value = grade_grade::standardise_score($value, $grade_item->grademin, $grade_item->grademax, 0, 100);
+     $value = bounded_number(0, $value, 100); // just in case
++    $value = format_float($value, $decimals, $localized);
+     foreach ($letters as $boundary => $letter) {
+         if ($value >= $boundary) {
+             return format_string($letter);

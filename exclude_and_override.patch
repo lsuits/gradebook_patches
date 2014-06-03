@@ -1,0 +1,27 @@
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..d370f9d 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -910,6 +910,11 @@ class grade_report_grader extends grade_report {
+                     $itemcell->attributes['class'] .= ' overridden';
+                 }
+ 
++
++                if ($grade->is_excluded()) {
++                    $itemcell->attributes['class'] .= ' excluded';
++                }
++
+                 if (!empty($grade->feedback)) {
+                     //should we be truncating feedback? ie $short_feedback = shorten_text($feedback, $this->feedback_trunc_length);
+                     $jsarguments['feedback'][] = array('user'=>$userid, 'item'=>$itemid, 'content'=>wordwrap(trim(format_string($grade->feedback, $grade->feedbackformat)),
+@@ -920,6 +925,10 @@ class grade_report_grader extends grade_report {
+                     $itemcell->text .= html_writer::tag('span', get_string('excluded', 'grades'), array('class'=>'excludedfloater'));
+                 }
+ 
++                if ($grade->is_overridden() && !$grade->is_excluded()) {
++                    $itemcell->text .= html_writer::tag('span', get_string('overridden', 'grades'), array('class'=>'excludedfloater'));
++                }
++
+                 // Do not show any icons if no grade (no record in DB to match)
+                 if (!$item->needsupdate and $USER->gradeediting[$this->courseid]) {
+                     $itemcell->text .= $this->get_icons($element);

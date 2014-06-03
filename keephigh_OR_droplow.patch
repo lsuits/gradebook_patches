@@ -1,0 +1,38 @@
+diff --git a/grade/edit/tree/lib.php b/grade/edit/tree/lib.php
+index c05eb92..149dd12 100644
+--- a/grade/edit/tree/lib.php
++++ b/grade/edit/tree/lib.php
+@@ -976,9 +976,13 @@ class grade_edit_tree_column_droplow extends grade_edit_tree_column_category {
+     }
+ 
+     public function get_category_cell($category, $levelclass, $params) {
+-        $droplow = '<label class="accesshide" for="droplow_' . $category->id.'">' . get_string('droplowestvalue', 'grades') . '</label>';
+-        $droplow .= '<input type="text" size="3" id="droplow_' . $category->id . '" name="droplow_' . $category->id . '" value="'
+-                . $category->droplow.'" />';
++        // HIDE THIS
++        $disabled = '';
++        if (!empty($category->keephigh)) {
++            $disabled = 'DISABLED';
++        }
++
++        $droplow = '<input '.$disabled.' type="text" size="3" id="droplow_'.$category->id.'" name="droplow_'.$category->id.'" value="'.$category->droplow.'" />';
+ 
+         if ($this->forced) {
+             $droplow = $category->droplow;
+@@ -1011,9 +1015,13 @@ class grade_edit_tree_column_keephigh extends grade_edit_tree_column_category {
+     }
+ 
+     public function get_category_cell($category, $levelclass, $params) {
+-        $keephigh = '<label class="accesshide" for="keephigh_'.$category->id.'">'.get_string('keephigh', 'grades').'</label>';
+-        $keephigh .= '<input type="text" size="3" id="keephigh_'.$category->id.'" name="keephigh_'.$category->id.'" value="'.
+-                $category->keephigh.'" />';
++        // HIDE THIS
++        $disabled = '';
++        if (!empty($category->droplow)) {
++            $disabled = 'DISABLED';
++        }
++
++        $keephigh = '<input '.$disabled.' type="text" size="3" id="keephigh_'.$category->id.'" name="keephigh_'.$category->id.'" value="'.$category->keephigh.'" />';
+ 
+         if ($this->forced) {
+             $keephigh = $category->keephigh;
