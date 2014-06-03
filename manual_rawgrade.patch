@@ -19,6 +19,47 @@ index 6d12d99..dcae382 100644
          $temp->add(new admin_setting_configselect('grade_decimalpoints', new lang_string('decimalpoints', 'grades'),
                                                    new lang_string('decimalpoints_help', 'grades'), 2,
                                                    array( '0' => '0',
+diff --git a/grade/report/grader/db/upgrade.php b/grade/report/grader/db/upgrade.php
+new file mode 100644
+index 0000000..fdfe40f
+--- /dev/null
++++ b/grade/report/grader/db/upgrade.php
+@@ -0,0 +1,35 @@
++<?php
++// This file is part of Moodle - http://moodle.org/
++//
++// Moodle is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, either version 3 of the License, or
++// (at your option) any later version.
++//
++// Moodle is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
++
++/**
++ * Upgrade code for gradebook grader report.
++ *
++ * @package   gradereport_grader
++ * @copyright 2013 Moodle Pty Ltd (http://moodle.com)
++ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
++ */
++
++function xmldb_gradereport_grader_upgrade($oldversion) {
++    global $CFG, $DB;
++    // Set rawgrade on manual grade items so that multiplicator and offset
++    // works on them like any other grade item.
++    $sql = "UPDATE  {grade_grades} gr, {grade_items} gi
++            SET     gr.rawgrade = gr.finalgrade
++            WHERE   gi.id = gr.itemid AND gi.itemtype = 'manual' AND gr.rawgrade IS NULL";
++    $DB->execute($sql);
++    upgrade_plugin_savepoint(true, 2014051201, 'gradereport', 'grader');
++    return true;
++}
 diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
 index c91394a..0c72a34 100644
 --- a/grade/report/grader/lib.php
@@ -36,8 +77,20 @@ index c91394a..0c72a34 100644
                      if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
                          $scale = $scalesarray[$item->scaleid];
                          $gradeval = (int)$gradeval; // scales use only integers
+diff --git a/grade/report/grader/version.php b/grade/report/grader/version.php
+index 9b31002..354c9a9 100644
+--- a/grade/report/grader/version.php
++++ b/grade/report/grader/version.php
+@@ -24,6 +24,6 @@
+ 
+ defined('MOODLE_INTERNAL') || die();
+ 
+-$plugin->version   = 2014051200;        // The current plugin version (Date: YYYYMMDDXX)
++$plugin->version   = 2014051201;        // The current plugin version (Date: YYYYMMDDXX)
+ $plugin->requires  = 2014050800;        // Requires this Moodle version
+ $plugin->component = 'gradereport_grader'; // Full name of the plugin (used for diagnostics)
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..2d8858a 100644
+index 9ea00eb..68ec46c 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
 @@ -689,6 +689,8 @@ $string['verbosescales'] = 'Verbose scales';
@@ -54,7 +107,7 @@ index 9ea00eb..2d8858a 100644
  $string['weightuc'] = 'Weight';
  $string['writinggradebookinfo'] = 'Writing gradebook settings';
 +$string['gradeitemmanualrecompute'] = 'Manual item recompute';
-+$string['gradeitemmanualrecompute_help'] = 'Allow the gradebook to automatically adjust the raw grade boundaries when editing the real grade boundaries for Manual items.<br /><strong>When enabled, you will have the option of manipulating category totals.';
++$string['gradeitemmanualrecompute_help'] = 'Allow the gradebook to automatically adjust the raw grade boundaries when editing the real grade boundaries for Manual items.<br /><strong>When enabled, you will have the option of manipulating category totals.</strong>';
  $string['xml'] = 'XML';
  $string['yes'] = 'Yes';
  $string['yourgrade'] = 'Your grade';
