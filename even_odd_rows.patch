@@ -1,0 +1,12 @@
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..dd1f4a6 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -848,6 +848,7 @@ class grade_report_grader extends grade_report {
+                 unset($hidingaffected);
+             }
+ 
++            $this->rowcount++;
+             $itemrow = new html_table_row();
+             $itemrow->id = 'user_'.$userid;
+             $itemrow->attributes['class'] = $rowclasses[$this->rowcount % 2];
