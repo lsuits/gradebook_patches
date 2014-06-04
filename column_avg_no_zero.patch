@@ -1,0 +1,86 @@
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..687895a 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -1354,6 +1354,7 @@ class grade_report_grader extends grade_report {
+                 }
+             }
+ 
++            $no_grade_SQL = $meanselection == 2 ? ' AND g.finalgrade > 0 ': '';
+             // MDL-10875 Empty grades must be evaluated as grademin, NOT always 0
+             // This query returns a count of ungraded grades (NULL finalgrade OR no matching record in grade_grades table)
+             $sql = "SELECT gi.id, COUNT(DISTINCT u.id) AS count
+@@ -1364,7 +1365,7 @@ class grade_report_grader extends grade_report {
+                       JOIN {role_assignments} ra
+                            ON ra.userid = u.id
+                       LEFT OUTER JOIN {grade_grades} g
+-                           ON (g.itemid = gi.id AND g.userid = u.id AND g.finalgrade IS NOT NULL)
++                           ON (g.itemid = gi.id AND g.userid = u.id AND (g.finalgrade IS NOT NULL $no_grade_SQL))
+                       $groupsql
+                      WHERE gi.courseid = :courseid
+                            AND ra.roleid $gradebookrolessql
+@@ -1400,7 +1401,7 @@ class grade_report_grader extends grade_report {
+                     $ungradedcount = $ungradedcounts[$itemid]->count;
+                 }
+ 
+-                if ($meanselection == GRADE_REPORT_MEAN_GRADED) {
++                if (($meanselection == GRADE_REPORT_MEAN_GRADED) || ($meanselection == GRADE_REPORT_MEAN_GRADED_NO_ZEROS)) {
+                     $meancount = $totalcount - $ungradedcount;
+                 } else { // Bump up the sum by the number of ungraded items * grademin
+                     $sumarray[$item->id] += $ungradedcount * $item->grademin;
+diff --git a/grade/report/grader/preferences_form.php b/grade/report/grader/preferences_form.php
+index ba2cb24..89a50ab 100644
+--- a/grade/report/grader/preferences_form.php
++++ b/grade/report/grader/preferences_form.php
+@@ -84,7 +84,8 @@ class grader_report_preferences_form extends moodleform {
+                                                                           0=>0, 1=>1, 2=>2, 3=>3, 4=>4, 5=>5);
+                 $preferences['prefrows']['meanselection']  = array(GRADE_REPORT_PREFERENCE_DEFAULT => '*default*',
+                                                                    GRADE_REPORT_MEAN_ALL => get_string('meanall', 'grades'),
+-                                                                   GRADE_REPORT_MEAN_GRADED => get_string('meangraded', 'grades'));
++                                                                   GRADE_REPORT_MEAN_GRADED => get_string('meangraded', 'grades'),
++                                                                   GRADE_REPORT_MEAN_GRADED_NO_ZEROS => get_string('meangradednozeros', 'grades'));
+ 
+                 $advanced = array_merge($advanced, array('averagesdisplaytype', 'averagesdecimalpoints'));
+             }
+diff --git a/grade/report/grader/settings.php b/grade/report/grader/settings.php
+index d1b02af..092037a 100644
+--- a/grade/report/grader/settings.php
++++ b/grade/report/grader/settings.php
+@@ -50,7 +50,8 @@ if ($ADMIN->fulltree) {
+     $settings->add(new admin_setting_configselect('grade_report_meanselection', get_string('meanselection', 'grades'),
+                                               get_string('meanselection_help', 'grades'), GRADE_REPORT_MEAN_GRADED,
+                                               array(GRADE_REPORT_MEAN_ALL => get_string('meanall', 'grades'),
+-                                                    GRADE_REPORT_MEAN_GRADED => get_string('meangraded', 'grades'))));
++                                                    GRADE_REPORT_MEAN_GRADED => get_string('meangraded', 'grades'),
++                                                    GRADE_REPORT_MEAN_GRADED_NO_ZEROS => get_string('meangradednozeros', 'grades'))));
+ 
+     $settings->add(new admin_setting_configcheckbox('grade_report_enableajax', get_string('enableajax', 'grades'),
+                                                 get_string('enableajax_help', 'grades'), 0));
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..75da96a 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -412,6 +412,7 @@ $string['max'] = 'Highest';
+ $string['maxgrade'] = 'Max grade';
+ $string['meanall'] = 'All grades';
+ $string['meangraded'] = 'Non-empty grades';
++$string['meangradednozeros'] = 'Non-empty, non-zero grades';
+ $string['meanselection'] = 'Grades selected for column averages';
+ $string['meanselection_help'] = 'This setting determines whether cells with no grade should be included when calculating the average (mean) for each category or grade item.';
+ $string['median'] = 'Median';
+diff --git a/lib/grade/constants.php b/lib/grade/constants.php
+index ba9fd82..089e835 100644
+--- a/lib/grade/constants.php
++++ b/lib/grade/constants.php
+@@ -240,6 +240,11 @@ define('GRADE_REPORT_MEAN_ALL', 0);
+ define('GRADE_REPORT_MEAN_GRADED', 1);
+ 
+ /**
++ * GRADE_REPORT_MEAN_GRADED_NO_ZEROS - Only include grade items where the student has a grade greater than 0 when calculating the mean.
++ */
++define('GRADE_REPORT_MEAN_GRADED_NO_ZEROS', 2);
++
++/**
+  * GRADE_NAVMETHOD_DROPDOWN - Display a drop down box to allow navigation within the gradebook
+  */
+ define('GRADE_NAVMETHOD_DROPDOWN', 0);

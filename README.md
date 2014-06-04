@@ -11,6 +11,8 @@ patch -p1 < /path/to/patch.patch
  1. Fixes hard-coded 2 decimal rounding bug.
  1. Allows admins to enable floating-point letter grade boundaries.
  1. Allows admins to enable system wide letter dropdowns.
+1. column_avg_no_zero.patch
+ 1. Allows faculty to omit explicitly marked 0 grades form column averages as well as empty grades for better column averages.
 1. coursecat_editable.patch
  1. Allows admin to disable the ability for users to rename their course category.
 1. curve-to.patch
