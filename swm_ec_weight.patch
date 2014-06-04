@@ -13,7 +13,7 @@ index 6d12d99..efe979b 100644
  
          $defaults = array('value'=>1, 'forced'=>false, 'adv'=>true);
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..645e76c 100644
+index 9ea00eb..45f98e8 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
 @@ -688,6 +688,8 @@ $string['useweighted'] = 'Use weighted';
@@ -21,7 +21,7 @@ index 9ea00eb..645e76c 100644
  $string['viewbygroup'] = 'Group';
  $string['viewgrades'] = 'View grades';
 +$string['w_ec'] = 'Weighted ' . $string['aggregationcoefextra'];
-+$string['w_ec_help'] = 'By default, '.$string['aggregationcoefextra'].' items in a ' .$string['aggregateweightedmean2'].' grade category are weighted. Unchecked this option to allow extra credit items to simply add points to the aggregated category total.';
++$string['w_ec_help'] = 'By default, '.$string['aggregationcoefextra'].' items in a ' .$string['aggregateweightedmean2'].' grade category are weighted. Uncheck this option to allow extra credit items to simply add points to the aggregated category total.';
  $string['warningexcludedsum'] = 'Warning: excluding of grades is not compatible with sum aggregation.';
  $string['weight'] = 'weight';
  $string['weightcourse'] = 'Use weighted grades for course';
