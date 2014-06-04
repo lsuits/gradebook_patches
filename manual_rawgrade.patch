@@ -112,7 +112,7 @@ index 9ea00eb..68ec46c 100644
  $string['yes'] = 'Yes';
  $string['yourgrade'] = 'Your grade';
 diff --git a/lib/grade/grade_item.php b/lib/grade/grade_item.php
-index 3f8b273..2626d04 100644
+index 3f8b273..05b9f26 100644
 --- a/lib/grade/grade_item.php
 +++ b/lib/grade/grade_item.php
 @@ -702,6 +702,14 @@ class grade_item extends grade_object {
@@ -149,3 +149,18 @@ index 3f8b273..2626d04 100644
      }
  
      /**
+@@ -1537,6 +1555,14 @@ class grade_item extends grade_object {
+             return false;
+         }
+ 
++        // Manual Item raw-grade support
++        if ($this->is_manual_item()) {
++            return $this->update_raw_grade(
++                $userid, $finalgrade, $source, $feedback, $feedbackformat,
++                $usermodified, null, null, $grade
++            );
++        }
++
+         $oldgrade = new stdClass();
+         $oldgrade->finalgrade     = $grade->finalgrade;
+         $oldgrade->overridden     = $grade->overridden;
