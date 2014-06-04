@@ -15,7 +15,7 @@ patch -p1 < /path/to/patch.patch
  1. Allows admin to disable the ability for users to rename their course category.
 1. curve-to.patch
  1. Changes multiplicator into a more user friendly curve-to option.
-  1. Example: max points for an item is 75, instructor can curve-to 100, enabling a 1.33333 multiplicator behind the scenes.
+   1. Example: max points for an item is 75, instructor can curve-to 100, enabling a 1.33333 multiplicator behind the scenes.
 1. disable_calculations.patch
  1. Allows the administrator to disable grade calculations site wide, including within all other settings areas.
 1. droplow_limit.patch
