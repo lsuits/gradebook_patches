@@ -37,7 +37,10 @@ patch -p1 < /path/to/patch.patch
  1. Integrates quick edit links in editable item row headers and in student rows.
 1. repeat_headers.patch
  1. Allows for admin default and user configurable repeating of grader report headers every N rows.
+1. student_privacy.patch
+ 1. Enables admins to require that teachers agree to protect student rights when downloading grades.
 1. ungraded_manual.patch
  1. Fixes the bug where users have the option to create manual items with NO GRADE grading type.
 1. wm_extra_credit.patch
  1. Allows for extra credit in the weighted mean aggregation method.
+ 1. Also allows for a setting to disable weighted extra credit.
