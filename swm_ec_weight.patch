@@ -1,0 +1,59 @@
+diff --git a/admin/settings/grades.php b/admin/settings/grades.php
+index 6d12d99..efe979b 100644
+--- a/admin/settings/grades.php
++++ b/admin/settings/grades.php
+@@ -102,6 +102,9 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+         $temp->add(new admin_setting_configmultiselect('grade_aggregations_visible', new lang_string('aggregationsvisible', 'grades'),
+                                                        new lang_string('aggregationsvisiblehelp', 'grades'), $defaultvisible, $options));
+ 
++        // Weighted Extra Credit handling
++        $temp->add(new admin_setting_configcheckbox('grade_w_extra_credit', new lang_string('w_ec', 'grades'), new lang_string('w_ec_help', 'grades'), '1'));
++
+         $options = array(0 => new lang_string('no'), 1 => new lang_string('yes'));
+ 
+         $defaults = array('value'=>1, 'forced'=>false, 'adv'=>true);
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..645e76c 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -688,6 +688,8 @@ $string['useweighted'] = 'Use weighted';
+ $string['verbosescales'] = 'Verbose scales';
+ $string['viewbygroup'] = 'Group';
+ $string['viewgrades'] = 'View grades';
++$string['w_ec'] = 'Weighted ' . $string['aggregationcoefextra'];
++$string['w_ec_help'] = 'By default, '.$string['aggregationcoefextra'].' items in a ' .$string['aggregateweightedmean2'].' grade category are weighted. Unchecked this option to allow extra credit items to simply add points to the aggregated category total.';
+ $string['warningexcludedsum'] = 'Warning: excluding of grades is not compatible with sum aggregation.';
+ $string['weight'] = 'weight';
+ $string['weightcourse'] = 'Use weighted grades for course';
+diff --git a/lib/grade/grade_category.php b/lib/grade/grade_category.php
+index d5a9e6d..786570f 100644
+--- a/lib/grade/grade_category.php
++++ b/lib/grade/grade_category.php
+@@ -707,6 +707,9 @@ class grade_category extends grade_object {
+                 // weight is the range of grade (usually grademax)
+                 $weightsum = 0;
+                 $sum       = null;
++                $extrasum  = 0;
++
++                $weighted_ec = get_config('moodle', 'grade_w_extra_credit');
+ 
+                 foreach ($grade_values as $itemid=>$grade_value) {
+                     $weight = $items[$itemid]->grademax - $items[$itemid]->grademin;
+@@ -717,6 +720,9 @@ class grade_category extends grade_object {
+ 
+                     if ($items[$itemid]->aggregationcoef == 0) {
+                         $weightsum += $weight;
++                    } elseif (empty($weighted_ec)) {
++                        $extrasum += ($grade_value / ($this->grade_item->grademax / $items[$itemid]->grademax));
++                        continue;
+                     }
+                     $sum += $weight * $grade_value;
+                 }
+@@ -727,6 +733,7 @@ class grade_category extends grade_object {
+                 } else {
+                     $agg_grade = $sum / $weightsum;
+                 }
++                $agg_grade += $extrasum;
+                 break;
+ 
+             case GRADE_AGGREGATE_EXTRACREDIT_MEAN: // special average
