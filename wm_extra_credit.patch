@@ -1,17 +1,3 @@
-diff --git a/admin/settings/grades.php b/admin/settings/grades.php
-index 6d12d99..efe979b 100644
---- a/admin/settings/grades.php
-+++ b/admin/settings/grades.php
-@@ -102,6 +102,9 @@ if (has_capability('moodle/grade:manage', $systemcontext)
-         $temp->add(new admin_setting_configmultiselect('grade_aggregations_visible', new lang_string('aggregationsvisible', 'grades'),
-                                                        new lang_string('aggregationsvisiblehelp', 'grades'), $defaultvisible, $options));
- 
-+        // Weighted Extra Credit handling
-+        $temp->add(new admin_setting_configcheckbox('grade_w_extra_credit', new lang_string('w_ec', 'grades'), new lang_string('w_ec_help', 'grades'), '1'));
-+
-         $options = array(0 => new lang_string('no'), 1 => new lang_string('yes'));
- 
-         $defaults = array('value'=>1, 'forced'=>false, 'adv'=>true);
 diff --git a/grade/edit/tree/index.php b/grade/edit/tree/index.php
 index e48643d..ecced86 100644
 --- a/grade/edit/tree/index.php
@@ -80,18 +66,8 @@ index c05eb92..a0d8d3f 100644
              } elseif ($coefstring ==  'aggregationcoefextraweight' || $coefstring == 'aggregationcoefextrasum') {
                  $this->uses_extra_credit = true;
              }
-diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..94854b1 100644
---- a/lang/en/grades.php
-+++ b/lang/en/grades.php
-@@ -703,3 +703,5 @@ $string['writinggradebookinfo'] = 'Writing gradebook settings';
- $string['xml'] = 'XML';
- $string['yes'] = 'Yes';
- $string['yourgrade'] = 'Your grade';
-+$string['w_ec'] = 'Weighted ' . $string['aggregationcoefextra'];
-+$string['w_ec_help'] = 'By default, '.$string['aggregationcoefextra'].' in '.$string['aggregateweightedmean'] . ' and ' .$string['aggregateweightedmean2'].' grade categories are weighted. Unchecked this option to allow extra credit items to simply add points to the aggregated total.';
 diff --git a/lib/grade/grade_category.php b/lib/grade/grade_category.php
-index d5a9e6d..180c21c 100644
+index d5a9e6d..7badeb2 100644
 --- a/lib/grade/grade_category.php
 +++ b/lib/grade/grade_category.php
 @@ -406,6 +406,31 @@ class grade_category extends grade_object {
@@ -126,7 +102,7 @@ index d5a9e6d..180c21c 100644
          return ($aggregationdiff || $keephighdiff || $droplowdiff || $aggonlygrddiff || $aggoutcomesdiff || $aggsubcatsdiff);
      }
  
-@@ -684,14 +709,22 @@ class grade_category extends grade_object {
+@@ -684,14 +709,20 @@ class grade_category extends grade_object {
              case GRADE_AGGREGATE_WEIGHTED_MEAN: // Weighted average of all existing final grades, weight specified in coef
                  $weightsum = 0;
                  $sum       = 0;
@@ -135,8 +111,6 @@ index d5a9e6d..180c21c 100644
                  foreach ($grade_values as $itemid=>$grade_value) {
  
 -                    if ($items[$itemid]->aggregationcoef <= 0) {
-+                $weighted_ec = get_config('moodle', 'grade_w_extra_credit');
-+
 +                    $coef = $items[$itemid]->aggregationcoef;
 +
 +                    if ($coef == 0) {
@@ -152,7 +126,7 @@ index d5a9e6d..180c21c 100644
                  }
  
                  if ($weightsum == 0) {
-@@ -700,6 +733,7 @@ class grade_category extends grade_object {
+@@ -700,6 +731,7 @@ class grade_category extends grade_object {
                  } else {
                      $agg_grade = $sum / $weightsum;
                  }
@@ -160,27 +134,15 @@ index d5a9e6d..180c21c 100644
                  break;
  
              case GRADE_AGGREGATE_WEIGHTED_MEAN2:
-@@ -707,6 +741,9 @@ class grade_category extends grade_object {
+@@ -707,6 +739,7 @@ class grade_category extends grade_object {
                  // weight is the range of grade (usually grademax)
                  $weightsum = 0;
                  $sum       = null;
 +                $extrasum  = 0;
-+
-+                $weighted_ec = get_config('moodle', 'grade_swm_extra_credit');
  
                  foreach ($grade_values as $itemid=>$grade_value) {
                      $weight = $items[$itemid]->grademax - $items[$itemid]->grademin;
-@@ -717,6 +754,9 @@ class grade_category extends grade_object {
- 
-                     if ($items[$itemid]->aggregationcoef == 0) {
-                         $weightsum += $weight;
-+                    } elseif (empty($weighted_ec)) {
-+                        $extrasum += ($grade_value / ($this->grade_item->grademax / $items[$itemid]->grademax));
-+                        continue;
-                     }
-                     $sum += $weight * $grade_value;
-                 }
-@@ -727,6 +767,7 @@ class grade_category extends grade_object {
+@@ -727,6 +760,7 @@ class grade_category extends grade_object {
                  } else {
                      $agg_grade = $sum / $weightsum;
                  }
@@ -188,7 +150,7 @@ index d5a9e6d..180c21c 100644
                  break;
  
              case GRADE_AGGREGATE_EXTRACREDIT_MEAN: // special average
-@@ -788,9 +829,11 @@ class grade_category extends grade_object {
+@@ -788,9 +822,11 @@ class grade_category extends grade_object {
          //find max grade possible
          $maxes = array();
  
@@ -201,7 +163,7 @@ index d5a9e6d..180c21c 100644
                  // extra credit from this activity - does not affect total
                  continue;
              }
-@@ -874,6 +917,9 @@ class grade_category extends grade_object {
+@@ -874,6 +910,9 @@ class grade_category extends grade_object {
      public function apply_limit_rules(&$grade_values, $items) {
          $extraused = $this->is_extracredit_used();
  
@@ -211,7 +173,7 @@ index d5a9e6d..180c21c 100644
          if (!empty($this->droplow)) {
              asort($grade_values, SORT_NUMERIC);
              $dropped = 0;
-@@ -897,7 +943,8 @@ class grade_category extends grade_object {
+@@ -897,7 +936,8 @@ class grade_category extends grade_object {
  
                  // Find the first remaining grade item that is available to be dropped
                  foreach ($grade_keys as $gradekeyindex=>$gradekey) {
@@ -221,7 +183,7 @@ index d5a9e6d..180c21c 100644
                          // Found a non-extra credit grade item that is eligible to be dropped
                          $originalindex = $gradekeyindex;
                          $founditemid = $grade_keys[$originalindex];
-@@ -924,7 +971,8 @@ class grade_category extends grade_object {
+@@ -924,7 +964,8 @@ class grade_category extends grade_object {
                          break;
                      }
  
@@ -231,7 +193,7 @@ index d5a9e6d..180c21c 100644
                          // Don't drop extra credit grade items. Continue the search.
                          continue;
                      }
-@@ -949,7 +997,7 @@ class grade_category extends grade_object {
+@@ -949,7 +990,7 @@ class grade_category extends grade_object {
  
              foreach ($grade_values as $itemid=>$value) {
  
@@ -240,7 +202,7 @@ index d5a9e6d..180c21c 100644
                      // we keep all extra credits
  
                  } else if ($kept < $this->keephigh) {
-@@ -962,6 +1010,22 @@ class grade_category extends grade_object {
+@@ -962,6 +1003,22 @@ class grade_category extends grade_object {
          }
      }
  
@@ -263,7 +225,7 @@ index d5a9e6d..180c21c 100644
      /**
       * Returns true if category uses extra credit of any kind
       *
-@@ -980,7 +1044,8 @@ class grade_category extends grade_object {
+@@ -980,7 +1037,8 @@ class grade_category extends grade_object {
      public static function aggregation_uses_extracredit($aggregation) {
          return ($aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN2
               or $aggregation == GRADE_AGGREGATE_EXTRACREDIT_MEAN
