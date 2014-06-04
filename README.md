@@ -22,6 +22,8 @@ patch -p1 < /path/to/patch.patch
  1. Allows the administrator to disable grade calculations site wide, including within all other settings areas.
 1. droplow_limit.patch
  1. Allows admin to require that drop lowest N grades only drop grades after N+1 number of grades are reached.
+1. even_odd_rows.patch
+ 1. Fixes bug where all rows were even in right_scroller in grader report.
 1. exclude_and_override.patch
  1. Very simple modification showing the word overridden and excluded within the grader report for overridden and excluded items.
 1. grade_history_cleanup.patch
