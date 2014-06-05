@@ -7,6 +7,11 @@ From your Moodle wwwroot folder:
 patch -p1 < /path/to/patch.patch
 ```
 #Patches for individual LSU gradebook features.
+1. anonymous_grades.patch
+ 1. Requires quick edit.
+ 1. Allows for truly anonymous grading of manual items within Moodle.
+  1. Graded items can only be adjusted by an administratively predefined adjustment value.
+  1. Requires students be assigned anonymous identifiers as optional profile fields.
 1. better_letters.patch
  1. Fixes hard-coded 2 decimal rounding bug.
  1. Allows admins to enable floating-point letter grade boundaries.

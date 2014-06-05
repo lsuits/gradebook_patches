@@ -1,0 +1,937 @@
+diff --git a/admin/settings/grades.php b/admin/settings/grades.php
+index 6d12d99..eb7973f 100644
+--- a/admin/settings/grades.php
++++ b/admin/settings/grades.php
+@@ -23,6 +23,50 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+     $temp = new admin_settingpage('gradessettings', new lang_string('generalsettings', 'grades'), 'moodle/grade:manage');
+     if ($ADMIN->fulltree) {
+ 
++       $temp->add(new admin_setting_heading('grade_anonymous_header',
++            get_string('anonymousgrading', 'grades'), ''));
++
++        $temp->add(new admin_setting_configcheckbox('grade_anonymous_grading',
++            get_string('anonymousgrading', 'grades'),
++            get_string('anonymousgrading_help', 'grades'), 0));
++
++        $course_cats = $DB->get_records_menu(
++            'course_categories', null, 'name ASC', 'id, name'
++        );
++
++        $temp->add(new admin_setting_configmultiselect('grade_anonymous_cats',
++            get_string('anonymouscategories', 'grades'),
++            get_string('anonymouscategories_help', 'grades'),
++            array(), $course_cats));
++
++        $fields = $DB->get_records_menu(
++            'user_info_field', null, 'name ASC', 'id, name'
++        );
++
++        $url = new moodle_url('/user/profile/index.php', array(
++            'id' => 0,
++            'action' => 'editfield',
++            'datatype' => 'text'
++        ));
++
++        if (!empty($fields)) {
++            $temp->add(new admin_setting_configselect('grade_anonymous_field',
++                get_string('anonymousfield', 'grades'),
++                get_string('anonymousfield_help', 'grades', $url->out()),
++                current(array_keys($fields)), $fields));
++        } else {
++            $temp->add(new admin_setting_heading('grade_anonymous_field',
++                get_string('anonymousfield', 'grades'),
++                get_string('anonymousfield_help', 'grades', $url->out())));
++        }
++
++        $temp->add(new admin_setting_configtext('grade_anonymous_adjusts',
++            get_string('anonymousadjusts', 'grades'),
++            get_string('anonymousadjusts_help', 'grades'), '0.0'));
++
++        $temp->add(new admin_setting_heading('grade_general_settings',
++            get_string('generalsettings', 'grades'), ''));
++
+         // new CFG variable for gradebook (what roles to display)
+         $temp->add(new admin_setting_special_gradebookroles());
+ 
+diff --git a/grade/edit/settings/form.php b/grade/edit/settings/form.php
+index 918d44b..97880c5 100644
+--- a/grade/edit/settings/form.php
++++ b/grade/edit/settings/form.php
+@@ -65,6 +65,14 @@ class course_settings_form extends moodleform {
+         $mform->addElement('select', 'aggregationposition', get_string('aggregationposition', 'grades'), $options);
+         $mform->addHelpButton('aggregationposition', 'aggregationposition', 'grades');
+ 
++        // Anonymous settings
++        if (grade_anonymous::is_supported($COURSE) and $can_view_admin_links) {
++            $mform->addElement('text', 'anonymous_adjusts',
++                get_string('anonymousadjusts', 'grades'));
++            $mform->setDefault('anonymous_adjusts', $CFG->grade_anonymous_adjusts);
++            $mform->addHelpButton('anonymous_adjusts', 'anonymousadjusts', 'grades');
++        }
++
+         // Grade item settings
+         $mform->addElement('header', 'grade_item_settings', get_string('gradeitemsettings', 'grades'));
+         $mform->setExpanded('grade_item_settings');
+diff --git a/grade/edit/settings/index.php b/grade/edit/settings/index.php
+index fa7a81f..037fdd8 100644
+--- a/grade/edit/settings/index.php
++++ b/grade/edit/settings/index.php
+@@ -60,13 +60,17 @@ if ($mform->is_cancelled()) {
+ 
+ } else if ($data = $mform->get_data()) {
+     $data = (array)$data;
+-    $general = array('displaytype', 'decimalpoints', 'aggregationposition');
++    $general = array('displaytype', 'decimalpoints', 'anonymous_adjusts', 'aggregationposition');
+     foreach ($data as $key=>$value) {
+         if (!in_array($key, $general) and strpos($key, 'report_') !== 0
+                                       and strpos($key, 'import_') !== 0
+                                       and strpos($key, 'export_') !== 0) {
+             continue;
+         }
++        if ($key == 'anonymous_adjusts' and
++            !is_numeric($value) or trim($value) === '') {
++            $value = -1;
++        }
+         if ($value == -1) {
+             $value = null;
+         }
+diff --git a/grade/edit/tree/grade.php b/grade/edit/tree/grade.php
+index 62536f6..1c00a8c 100644
+--- a/grade/edit/tree/grade.php
++++ b/grade/edit/tree/grade.php
+@@ -48,6 +48,11 @@ if (!$course = $DB->get_record('course', array('id' => $courseid))) {
+     print_error('nocourseid');
+ }
+ 
++$p = array('itemid' => $itemid);
++if (grade_anonymous::is_supported($course) and grade_anonymous::fetch($p)) {
++    print_error('anonymousnotallowed', 'grades');
++}
++
+ $PAGE->set_pagelayout('incourse');
+ require_login($course);
+ $context = context_course::instance($course->id);
+diff --git a/grade/edit/tree/item.php b/grade/edit/tree/item.php
+index 7acf2eb..93fe2e4 100644
+--- a/grade/edit/tree/item.php
++++ b/grade/edit/tree/item.php
+@@ -143,6 +143,8 @@ if ($mform->is_cancelled()) {
+     grade_item::set_properties($grade_item, $data);
+     $grade_item->outcomeid = null;
+ 
++    unset($grade_item->anonymous);
++
+     // Handle null decimals value
+     if (!property_exists($data, 'decimals') or $data->decimals < 0) {
+         $grade_item->decimals = null;
+@@ -152,6 +154,15 @@ if ($mform->is_cancelled()) {
+         $grade_item->itemtype = 'manual'; // all new items to be manual only
+         $grade_item->insert();
+ 
++        // Anonymous check
++        if (isset($data->anonymous) and grade_anonymous::is_supported($course)) {
++            $anon = new grade_anonymous(array('itemid' => $grade_item->id));
++
++            if (empty($anon->id)) {
++                $anon->insert();
++            }
++        }
++
+         // set parent if needed
+         if (isset($data->parentcategory)) {
+             $grade_item->set_parent($data->parentcategory, 'gradebook');
+diff --git a/grade/edit/tree/item_form.php b/grade/edit/tree/item_form.php
+index 67c7a20..cade519 100644
+--- a/grade/edit/tree/item_form.php
++++ b/grade/edit/tree/item_form.php
+@@ -41,6 +41,12 @@ class edit_item_form extends moodleform {
+ /// visible elements
+         $mform->addElement('header', 'general', get_string('gradeitem', 'grades'));
+ 
++        if (grade_anonymous::is_supported($COURSE)) {
++            $mform->addElement(
++                'checkbox', 'anonymous', get_string('anonymousitem', 'grades')
++            );
++        }
++
+         $mform->addElement('text', 'itemname', get_string('itemname', 'grades'));
+         $mform->setType('itemname', PARAM_TEXT);
+         $mform->addElement('text', 'iteminfo', get_string('iteminfo', 'grades'));
+@@ -225,6 +231,18 @@ class edit_item_form extends moodleform {
+         $mform =& $this->_form;
+ 
+         if ($id = $mform->getElementValue('id')) {
++
++            if ($mform->elementExists('anonymous')) {
++                $anon = grade_anonymous::fetch(array('itemid' => $id));
++
++                if ($anon) {
++                    $mform->setDefault('anonymous', 1);
++                    $mform->hardFreeze('anonymous');
++                } else {
++                    $mform->removeElement('anonymous');
++                }
++            }
++
+             $grade_item = grade_item::fetch(array('id'=>$id));
+ 
+             if (!$grade_item->is_raw_used()) {
+diff --git a/grade/report/grader/db/install.xml b/grade/report/grader/db/install.xml
+new file mode 100644
+index 0000000..88af821
+--- /dev/null
++++ b/grade/report/grader/db/install.xml
+@@ -0,0 +1,76 @@
++<?xml version="1.0" encoding="UTF-8" ?>
++<XMLDB PATH="grade/report/grader/db" VERSION="20120409" COMMENT="XMLDB file for Moodle anonymous grading"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++    xsi:noNamespaceSchemaLocation="../../../../lib/xmldb/xmldb.xsd">
++  <TABLES>
++    <TABLE NAME="grade_anon_items" COMMENT="Anonymous grade items" NEXT="grade_anon_grades">
++      <FIELDS>
++        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="false" SEQUENCE="true" NEXT="itemid"/>
++        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" COMMENT="The Moodle grade_item id reference" PREVIOUS="id" NEXT="complete"/>
++        <FIELD NAME="complete" TYPE="int" LENGTH="1" NOTNULL="true" UNSIGNED="true" DEFAULT="0" SEQUENCE="false" COMMENT="Boolean flag to quickly determine whether or not an item is complete." PREVIOUS="itemid"/>
++      </FIELDS>
++      <KEYS>
++        <KEY NAME="primary" TYPE="primary" FIELDS="id" NEXT="fk_gradeitemid"/>
++        <KEY NAME="fk_gradeitemid" TYPE="foreign-unique" FIELDS="itemid" REFTABLE="grade_items" REFFIELDS="id" PREVIOUS="primary"/>
++      </KEYS>
++    </TABLE>
++    <TABLE NAME="grade_anon_grades" COMMENT="Temporary grade table housing the temporary final grade and adjustment value." PREVIOUS="grade_anon_items" NEXT="grade_anon_items_history">
++      <FIELDS>
++        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="true" NEXT="anonymous_itemid"/>
++        <FIELD NAME="anonymous_itemid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="id" NEXT="userid"/>
++        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="anonymous_itemid" NEXT="finalgrade"/>
++        <FIELD NAME="finalgrade" TYPE="number" LENGTH="10" NOTNULL="false" UNSIGNED="false" SEQUENCE="false" DECIMALS="5" PREVIOUS="userid" NEXT="adjust_value"/>
++        <FIELD NAME="adjust_value" TYPE="number" LENGTH="10" NOTNULL="false" UNSIGNED="false" DEFAULT="0.00000" SEQUENCE="false" DECIMALS="5" PREVIOUS="finalgrade"/>
++      </FIELDS>
++      <KEYS>
++        <KEY NAME="primary" TYPE="primary" FIELDS="id" NEXT="fk_gradeitemid"/>
++        <KEY NAME="fk_gradeitemid" TYPE="foreign" FIELDS="anonymous_itemid" REFTABLE="grade_anonymous_items" REFFIELDS="id" PREVIOUS="primary" NEXT="fk_userid"/>
++        <KEY NAME="fk_userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id" PREVIOUS="fk_gradeitemid"/>
++      </KEYS>
++    </TABLE>
++    <TABLE NAME="grade_anon_items_history" COMMENT="History table for anonymous grading" PREVIOUS="grade_anon_grades" NEXT="grade_anon_grades_history">
++      <FIELDS>
++        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="true" NEXT="action"/>
++        <FIELD NAME="action" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="id" NEXT="oldid"/>
++        <FIELD NAME="oldid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="action" NEXT="source"/>
++        <FIELD NAME="source" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" PREVIOUS="oldid" NEXT="timemodified"/>
++        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" UNSIGNED="true" SEQUENCE="false" PREVIOUS="source" NEXT="loggeduser"/>
++        <FIELD NAME="loggeduser" TYPE="int" LENGTH="10" NOTNULL="false" UNSIGNED="true" SEQUENCE="false" PREVIOUS="timemodified" NEXT="itemid"/>
++        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="loggeduser" NEXT="complete"/>
++        <FIELD NAME="complete" TYPE="int" LENGTH="1" NOTNULL="true" UNSIGNED="true" DEFAULT="0" SEQUENCE="false" PREVIOUS="itemid"/>
++      </FIELDS>
++      <KEYS>
++        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
++      </KEYS>
++      <INDEXES>
++        <INDEX NAME="gradeanonhist_act_ix" UNIQUE="false" FIELDS="action" NEXT="gradeanonhist_old_ix"/>
++        <INDEX NAME="gradeanonhist_old_ix" UNIQUE="false" FIELDS="oldid" PREVIOUS="gradeanonhist_act_ix" NEXT="gradeanonhist_log_ix"/>
++        <INDEX NAME="gradeanonhist_log_ix" UNIQUE="false" FIELDS="loggeduser" PREVIOUS="gradeanonhist_old_ix" NEXT="gradeanonhist_ite_ix"/>
++        <INDEX NAME="gradeanonhist_ite_ix" UNIQUE="false" FIELDS="itemid" PREVIOUS="gradeanonhist_log_ix"/>
++      </INDEXES>
++    </TABLE>
++    <TABLE NAME="grade_anon_grades_history" COMMENT="Anonymous grades history table" PREVIOUS="grade_anon_items_history">
++      <FIELDS>
++        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="true" NEXT="action"/>
++        <FIELD NAME="action" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="id" NEXT="oldid"/>
++        <FIELD NAME="oldid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="action" NEXT="source"/>
++        <FIELD NAME="source" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" PREVIOUS="oldid" NEXT="timemodified"/>
++        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" UNSIGNED="true" SEQUENCE="false" PREVIOUS="source" NEXT="loggeduser"/>
++        <FIELD NAME="loggeduser" TYPE="int" LENGTH="10" NOTNULL="false" UNSIGNED="true" SEQUENCE="false" PREVIOUS="timemodified" NEXT="anonymous_itemid"/>
++        <FIELD NAME="anonymous_itemid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="loggeduser" NEXT="userid"/>
++        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" SEQUENCE="false" PREVIOUS="anonymous_itemid" NEXT="finalgrade"/>
++        <FIELD NAME="finalgrade" TYPE="number" LENGTH="10" NOTNULL="false" UNSIGNED="false" SEQUENCE="false" DECIMALS="5" PREVIOUS="userid" NEXT="adjust_value"/>
++        <FIELD NAME="adjust_value" TYPE="number" LENGTH="10" NOTNULL="true" UNSIGNED="false" DEFAULT="0.00000" SEQUENCE="false" DECIMALS="5" PREVIOUS="finalgrade"/>
++      </FIELDS>
++      <KEYS>
++        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
++      </KEYS>
++      <INDEXES>
++        <INDEX NAME="gradeanongrahist_act_ix" UNIQUE="false" FIELDS="action" NEXT="gradeanongrahist_old_ix"/>
++        <INDEX NAME="gradeanongrahist_old_ix" UNIQUE="false" FIELDS="oldid" PREVIOUS="gradeanongrahist_act_ix" NEXT="gradeanongrahist_log_ix"/>
++        <INDEX NAME="gradeanongrahist_log_ix" UNIQUE="false" FIELDS="loggeduser" PREVIOUS="gradeanongrahist_old_ix" NEXT="gradeanongrahist_ait_ix"/>
++        <INDEX NAME="gradeanongrahist_ait_ix" UNIQUE="false" FIELDS="anonymous_itemid" PREVIOUS="gradeanongrahist_log_ix"/>
++      </INDEXES>
++    </TABLE>
++  </TABLES>
++</XMLDB>
+diff --git a/grade/report/grader/db/upgrade.php b/grade/report/grader/db/upgrade.php
+new file mode 100644
+index 0000000..9342707
+--- /dev/null
++++ b/grade/report/grader/db/upgrade.php
+@@ -0,0 +1,129 @@
++<?php
++// This file is part of Moodle - http://moodle.org/
++//
++// Moodle is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, either version 3 of the License, or
++// (at your option) any later version.
++//
++// Moodle is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
++
++/**
++ * Upgrade code for gradebook grader report.
++ *
++ * @package   gradereport_grader
++ * @copyright 2013 Moodle Pty Ltd (http://moodle.com)
++ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
++ */
++
++function xmldb_gradereport_grader_upgrade($oldversion) {
++    global $CFG, $DB;
++
++    $dbman = $DB->get_manager();
++
++    // Create tables to support anonymous grading.
++    if (!$dbman->table_exists('grade_anon_items')) {
++        // Define table grade_anonymous_items to be created.
++        $table = new xmldb_table('grade_anon_items');
++
++        // Adding fields to table grade_anonymous_items.
++        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
++        $table->add_field('itemid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('complete', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0');
++
++        // Adding keys to table grade_anonymous_items.
++        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
++        $table->add_key('fk_gradeitemid', XMLDB_KEY_FOREIGN_UNIQUE, array('itemid'), 'grade_items', array('id'));
++
++        // Conditionally launch create table for grade_anonymous_items.
++        if (!$dbman->table_exists($table)) {
++            $dbman->create_table($table);
++        }
++
++        // Define table grade_anon_items_history to be created.
++        $table = new xmldb_table('grade_anon_items_history');
++
++        // Adding fields to table grade_anon_items_history.
++        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
++        $table->add_field('action', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('oldid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('source', XMLDB_TYPE_CHAR, '255', null, null, null, null);
++        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, null, null, null);
++        $table->add_field('loggeduser', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, null, null, null);
++        $table->add_field('itemid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('complete', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0');
++
++        // Adding keys to table grade_anon_items_history.
++        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
++
++        // Adding indexes to table grade_anon_items_history.
++        $table->add_index('gradeanonhist_act_ix', XMLDB_INDEX_NOTUNIQUE, array('action'));
++        $table->add_index('gradeanonhist_old_ix', XMLDB_INDEX_NOTUNIQUE, array('oldid'));
++        $table->add_index('gradeanonhist_log_ix', XMLDB_INDEX_NOTUNIQUE, array('loggeduser'));
++        $table->add_index('gradeanonhist_ite_ix', XMLDB_INDEX_NOTUNIQUE, array('itemid'));
++
++        // Conditionally launch create table for grade_anon_items_history.
++        if (!$dbman->table_exists($table)) {
++            $dbman->create_table($table);
++        }
++
++         // Define table grade_anonymous_grades to be created.
++        $table = new xmldb_table('grade_anon_grades');
++
++        // Adding fields to table grade_anonymous_grades.
++        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
++        $table->add_field('anonymous_itemid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('finalgrade', XMLDB_TYPE_NUMBER, '10, 5', null, null, null, null);
++        $table->add_field('adjust_value', XMLDB_TYPE_NUMBER, '10, 5', null, null, null, '0.00000');
++
++        // Adding keys to table grade_anonymous_grades.
++        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
++        $table->add_key('fk_gradeitemid', XMLDB_KEY_FOREIGN, array('anonymous_itemid'), 'grade_anonymous_items', array('id'));
++        $table->add_key('fk_userid', XMLDB_KEY_FOREIGN, array('userid'), 'user', array('id'));
++
++        // Conditionally launch create table for grade_anonymous_grades.
++        if (!$dbman->table_exists($table)) {
++            $dbman->create_table($table);
++        }
++
++         // Define table grade_anon_grades_history to be created.
++        $table = new xmldb_table('grade_anon_grades_history');
++
++        // Adding fields to table grade_anon_grades_history.
++        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
++        $table->add_field('action', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('oldid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('source', XMLDB_TYPE_CHAR, '255', null, null, null, null);
++        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, null, null, null);
++        $table->add_field('loggeduser', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, null, null, null);
++        $table->add_field('anonymous_itemid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, null);
++        $table->add_field('finalgrade', XMLDB_TYPE_NUMBER, '10, 5', null, null, null, null);
++        $table->add_field('adjust_value', XMLDB_TYPE_NUMBER, '10, 5', null, XMLDB_NOTNULL, null, '0.00000');
++
++        // Adding keys to table grade_anon_grades_history.
++        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
++
++        // Adding indexes to table grade_anon_grades_history.
++        $table->add_index('gradeanongrahist_act_ix', XMLDB_INDEX_NOTUNIQUE, array('action'));
++        $table->add_index('gradeanongrahist_old_ix', XMLDB_INDEX_NOTUNIQUE, array('oldid'));
++        $table->add_index('gradeanongrahist_log_ix', XMLDB_INDEX_NOTUNIQUE, array('loggeduser'));
++        $table->add_index('gradeanongrahist_ait_ix', XMLDB_INDEX_NOTUNIQUE, array('anonymous_itemid'));
++
++        // Conditionally launch create table for grade_anon_grades_history.
++        if (!$dbman->table_exists($table)) {
++            $dbman->create_table($table);
++        }
++
++        upgrade_plugin_savepoint(true, 2014060400, 'gradereport', 'grader');
++    }
++
++    return true;
++}
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..60b6212 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -131,6 +131,9 @@ class grade_report_grader extends grade_report {
+         // Grab the grade_tree for this course
+         $this->gtree = new grade_tree($this->courseid, true, $switch, $this->collapsed, $nooutcomes);
+ 
++        // Load Anonymous items
++        $this->load_anonymous();
++
+         $this->sortitemid = $sortitemid;
+ 
+         // base url for sorting by first/last name
+@@ -704,7 +707,7 @@ class grade_report_grader extends grade_report {
+      * @return array Array of html_table_row objects
+      */
+     public function get_right_rows($displayaverages) {
+-        global $CFG, $USER, $OUTPUT, $DB, $PAGE;
++        global $CFG, $COURSE, $USER, $OUTPUT, $DB, $PAGE;
+ 
+         $rows = array();
+         $this->rowcount = 0;
+@@ -882,6 +885,8 @@ class grade_report_grader extends grade_report {
+                     $jsarguments['grades'][] = array('user'=>$userid, 'item'=>$itemid, 'grade'=>$gradevalforjs);
+                 }
+ 
++                $is_anon = isset($this->anonymous_items[$itemid]);
++
+                 // MDL-11274
+                 // Hide grades in the grader report if the current grader doesn't have 'moodle/grade:viewhidden'
+                 if (!$this->canviewhidden and $grade->is_hidden()) {
+@@ -921,7 +926,7 @@ class grade_report_grader extends grade_report {
+                 }
+ 
+                 // Do not show any icons if no grade (no record in DB to match)
+-                if (!$item->needsupdate and $USER->gradeediting[$this->courseid]) {
++                if (!$item->needsupdate and $USER->gradeediting[$this->courseid] and !$is_anon) {
+                     $itemcell->text .= $this->get_icons($element);
+                 }
+ 
+@@ -943,7 +948,7 @@ class grade_report_grader extends grade_report {
+                 if ($item->needsupdate) {
+                     $itemcell->text .= html_writer::tag('span', get_string('error'), array('class'=>"gradingerror$hidden"));
+ 
+-                } else if ($USER->gradeediting[$this->courseid]) {
++                } else if ($USER->gradeediting[$this->courseid] and !$is_anon) {
+ 
+                     if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
+                         $scale = $scalesarray[$item->scaleid];
+@@ -1038,7 +1043,7 @@ class grade_report_grader extends grade_report {
+             $rows[] = $itemrow;
+         }
+ 
+-        if ($this->get_pref('enableajax')) {
++        if ($this->get_pref('enableajax') && !grade_anonymous::is_supported($COURSE)) {
+             $jsarguments['cfg']['ajaxenabled'] = true;
+             $jsarguments['cfg']['scales'] = array();
+             foreach ($jsscales as $scale) {
+@@ -1234,14 +1239,16 @@ class grade_report_grader extends grade_report {
+             $iconsrow->attributes['class'] = 'controls';
+ 
+             foreach ($this->gtree->items as $itemid => $unused) {
++                $is_anon = isset($this->anonymous_items[$itemid]);
+                 // emulate grade element
+                 $item = $this->gtree->get_item($itemid);
+-
+                 $eid = $this->gtree->get_item_eid($item);
+                 $element = $this->gtree->locate_element($eid);
+                 $itemcell = new html_table_cell();
+                 $itemcell->attributes['class'] = 'controls icons i'.$itemid;
+-                $itemcell->text = $this->get_icons($element);
++                if (!$is_anon) {
++                    $itemcell->text = $this->get_icons($element);
++                }
+                 $iconsrow->cells[] = $itemcell;
+             }
+             $rows[] = $iconsrow;
+@@ -1609,6 +1616,25 @@ class grade_report_grader extends grade_report {
+         return $CFG->grade_report_fixedstudents;
+     }
+ 
++    public function load_anonymous() {
++
++        if (empty($this->anonymous_items)) {
++            global $DB;
++            $sql = 'SELECT anon.* FROM {grade_items} gi, {grade_anon_items} anon
++                WHERE anon.itemid = gi.id';
++
++            $this->anonymous_items = array();
++
++            foreach ($DB->get_records_sql($sql) as $item) {
++                $this->anonymous_items[$item->itemid] =
++                    grade_anonymous::fetch(array('id' => $item->id));
++            }
++        }
++
++        return $this->anonymous_items;
++    }
++
++
+     /**
+      * Refactored function for generating HTML of sorting links with matching arrows.
+      * Returns an array with 'studentname' and 'idnumber' as keys, with HTML ready
+diff --git a/grade/report/grader/version.php b/grade/report/grader/version.php
+index 9b31002..87ce316 100644
+--- a/grade/report/grader/version.php
++++ b/grade/report/grader/version.php
+@@ -24,6 +24,6 @@
+ 
+ defined('MOODLE_INTERNAL') || die();
+ 
+-$plugin->version   = 2014051200;        // The current plugin version (Date: YYYYMMDDXX)
++$plugin->version   = 2014051202;        // The current plugin version (Date: YYYYMMDDXX)
+ $plugin->requires  = 2014050800;        // Requires this Moodle version
+ $plugin->component = 'gradereport_grader'; // Full name of the plugin (used for diagnostics)
+diff --git a/lang/en/grades.php b/lang/en/grades.php
+index 9ea00eb..49a9e4d 100644
+--- a/lang/en/grades.php
++++ b/lang/en/grades.php
+@@ -84,6 +84,19 @@ $string['aggregationsvisiblehelp'] = 'Select all aggregation types that should b
+ $string['allgrades'] = 'All grades by category';
+ $string['allstudents'] = 'All students';
+ $string['allusers'] = 'All users';
++$string['anonymous'] = 'Anonymous';
++$string['anonymousadjusts'] = 'Anonymous adjusts +/-';
++$string['anonymousadjusts_help'] = 'In anonymous grading, final grades cannot be changed once committed. Adjustments allow changes within the specified constraints.';
++$string['anonymouscategories'] = 'Anonymous categories';
++$string['anonymouscategories_help'] = 'Anonymous grading will be limited to these course categories. If none are selected, then all categories will be allowed to use anonymous grading.';
++$string['anonymousfield'] = 'Anonymous field';
++$string['anonymousfield_help'] = 'The selected profile field will store the anonymous number. Create one [here]({$a}).';
++$string['anonymousgrading'] = 'Anonymous grading';
++$string['anonymousgrading_help'] = 'Enable anonymous grading in Moodle';
++$string['anonymousitem'] = 'Anonymous item';
++$string['anonymouslessthanmin'] = 'The adjustment entered for {$a->itemname} for {$a->username} is less than -{$a->boundary}.<br />Anonymous graded courses do not allow for unlimited grading.';
++$string['anonymousmorethanmax'] = 'The adjustment entered for {$a->itemname} for {$a->username} is more than {$a->boundary}.<br />Anonymous graded courses do not allow for unlimited grading.';
++$string['anonymousnotallowed'] = 'Directly editing anonymous grades is not allowed.';
+ $string['autosort'] = 'Auto-sort';
+ $string['availableidnumbers'] = 'Available ID numbers';
+ $string['average'] = 'Average';
+diff --git a/lib/grade/grade_anonymous.php b/lib/grade/grade_anonymous.php
+new file mode 100644
+index 0000000..2660cdb
+--- /dev/null
++++ b/lib/grade/grade_anonymous.php
+@@ -0,0 +1,337 @@
++<?php
++
++class grade_anonymous extends grade_object {
++    public $table = 'grade_anon_items';
++
++    public static $profileid;
++
++    var $required_fields = array('id', 'itemid', 'complete');
++
++    var $id;
++
++    var $itemid;
++
++    var $complete = false;
++
++    var $grade_item;
++
++    var $adjust_boundary;
++
++    public static function fetch($params) {
++        return grade_object::fetch_helper(
++            'grade_anon_items', 'grade_anonymous', $params
++        );
++    }
++
++    public static function fetch_all($params) {
++        return grade_object::fetch_all_helper(
++            'grade_anon_items', 'grade_anonymous', $params
++        );
++    }
++
++    public function load_item() {
++        if (empty($this->grade_item) and !empty($this->itemid)) {
++            $this->grade_item = grade_item::fetch(array('id' => $this->itemid));
++        }
++
++        return $this->grade_item;
++    }
++
++    public function load_grade($userid, $default=true) {
++        if (empty($this->itemid) or empty($this->id)) {
++            return array();
++        }
++
++        $grade = grade_anonymous_grade::fetch(array(
++            'anonymous_itemid' => $this->id,
++            'userid' => $userid
++        ));
++
++        if (!$grade and $default) {
++            $instance = new stdClass;
++
++            $instance->anonymous_itemid = $this->id;
++            $instance->userid = $userid;
++
++            $grade = new grade_anonymous_grade($instance, false);
++        }
++
++        if ($grade) {
++            // TODO: rethink db... rawgrade plus itemid?
++            $grade->anonymous_item = $this;
++            $grade->grade_item = $this->load_item();
++            $grade->itemid = $grade->grade_item->id;
++            $grade->rawgrade = $grade->finalgrade;
++        }
++
++        return $grade;
++    }
++
++    public function update_final_grade($userid, $finalgrade=false, $source=null, $feedback=false, $feedbackformat=FORMAT_MOODLE, $usermodified=null) {
++        $grade = $this->load_grade($userid);
++
++        if (!$this->is_completed()) {
++            // Clients of API should be mindful of scales; empty scale is -1
++            if ($grade->id and empty($finalgrade)) {
++                return $grade->delete($source);
++            }
++
++            $grade->finalgrade = $this->bounded_grade($finalgrade);
++            return $grade->id ? $grade->update($source) : $grade->insert($source);
++        } else {
++            $grade->adjust_value = $finalgrade ?
++                $grade->bound_adjust_value($finalgrade) : 0;
++
++            $grade->update($source);
++
++            return $this->load_item()->update_final_grade(
++                $userid, $this->bounded_grade($grade->real_grade()), $source,
++                $feedback, $feedbackformat, $usermodified
++            );
++        }
++    }
++
++    public function check_completed($real_users) {
++        global $DB;
++
++        $anon_users = $this->anonymous_users($real_users);
++
++        $real_count = count($real_users);
++
++        if (count($anon_users) != $real_count) {
++            return false;
++        }
++
++        $userids = implode(',', array_keys($real_users));
++        $select = 'userid IN (' . $userids . ') AND anonymous_itemid = :itemid';
++        $params = array('itemid' => $this->id);
++
++        $count = $DB->count_records_select('grade_anon_grades', $select, $params);
++
++        return $real_count == $count;
++    }
++
++    public function is_completed() {
++        return $this->complete;
++    }
++
++    public function set_completed($status = true) {
++        $this->complete = $status;
++        $this->update();
++
++        if ($this->complete) {
++            $grades = grade_anonymous_grade::fetch_all(array(
++                'anonymous_itemid' => $this->id
++            ));
++
++            foreach ($grades as $grade) {
++                $this->load_item()->update_final_grade(
++                    $grade->userid, $grade->real_grade()
++                );
++            }
++        } else {
++            $this->load_item()->delete_all_grades();
++        }
++    }
++
++    public function adjust_boundary() {
++        global $CFG;
++
++        if (is_null($this->adjust_boundary)) {
++            $this->adjust_boundary = (float) grade_get_setting(
++                $this->load_item()->courseid,
++                'anonymous_adjusts',
++                $CFG->grade_anonymous_adjusts
++            );
++        }
++
++        return $this->adjust_boundary;
++    }
++
++    public static function anonymous_profile() {
++        global $DB;
++
++        if (empty(self::$profileid)) {
++            $fields = $DB->get_records('user_info_field');
++
++            if (empty($fields)) {
++                debugging('No user profile fields to choose from.');
++                return false;
++            }
++
++            $fieldid = get_config('moodle', 'grade_anonymous_field');
++
++            $fieldid = empty($fieldid) ? reset($fields)->id : $fieldid;
++
++            if (!isset($fields[$fieldid])) {
++                debugging('Selected anonymous profile field does not exists.');
++                return false;
++            }
++
++            self::$profileid = $fieldid;
++        }
++
++        return self::$profileid;
++    }
++
++    public static function anonymous_users($real_users) {
++        global $DB;
++
++        $profileid = self::anonymous_profile();
++
++        if (empty($profileid)) {
++            return array();
++        }
++
++        $userids = implode(',', array_keys($real_users));
++
++        $sql = 'SELECT d.userid AS id, d.data FROM {user_info_data} d
++            WHERE d.userid IN (' . $userids.')
++              AND d.fieldid = :fieldid ORDER BY d.data' ;
++
++        $params = array('fieldid' => $profileid);
++        $anonymous_users = $DB->get_records_sql($sql, $params);
++
++        return $anonymous_users;
++    }
++
++    public static function is_supported($course) {
++        // Enabled system wide?
++        $enabled = (bool)get_config('moodle', 'grade_anonymous_grading');
++
++        $cats = explode(',', get_config('moodle', 'grade_anonymous_cats'));
++
++        $is_cat = (empty($cats) or in_array($course->category, $cats));
++
++        return ($enabled and $is_cat);
++    }
++
++    public function delete($source = null) {
++        $params = array('anonymous_itemid' => $this->id);
++
++        if ($grades = grade_anonymous_grade::fetch_all($params)) {
++            foreach ($grades as $grade) {
++                $grade->delete($source);
++            }
++        }
++        return parent::delete($source);
++    }
++
++    public function __call($name, $args) {
++        if (!method_exists($this->load_item(), $name)) {
++            print_error('anonymousnomethod', 'grades', '', $name);
++        }
++
++        return call_user_func_array(array($this->load_item(), $name), $args);
++    }
++
++    public function __get($name) {
++        if (isset($this->load_item()->$name)) {
++            return $this->load_item()->$name;
++        }
++
++        return null;
++    }
++}
++
++class grade_anonymous_grade extends grade_object {
++    public $table = 'grade_anon_grades';
++
++    var $required_fields = array(
++        'id', 'userid', 'anonymous_itemid', 'finalgrade', 'adjust_value'
++    );
++
++    var $adjust_value = 0;
++
++    var $anonymous_itemid;
++
++    var $anonymous_item;
++
++    var $userid;
++
++    var $finalgrade;
++
++    var $rawgrade;
++
++    var $itemid;
++
++    var $grade_item;
++
++    var $underlying;
++
++    public static function fetch($params) {
++        return grade_object::fetch_helper(
++            'grade_anon_grades', 'grade_anonymous_grade', $params
++        );
++    }
++
++    public static function fetch_all($params) {
++        return grade_object::fetch_all_helper(
++            'grade_anon_grades', 'grade_anonymous_grade', $params
++        );
++    }
++
++    public function load_item() {
++        if (empty($this->anonymous_item)) {
++            $params = array('id' => $this->anonymous_itemid);
++            $this->anonymous_item = grade_anonymous::fetch($params);
++        }
++
++        return $this->anonymous_item;
++    }
++
++    public function load_grade_item() {
++        if (empty($this->grade_item)) {
++            $this->grade_item = $this->load_item()->load_item();
++        }
++
++        return $this->grade_item;
++    }
++
++    public function load_grade() {
++        if ($this->load_item()->is_completed() and empty($this->underlying)) {
++            $this->underlying = grade_grade::fetch(array(
++                'userid' => $this->userid,
++                'itemid' => $this->load_item()->itemid
++            ));
++        }
++
++        return $this->underlying;
++    }
++
++    public function real_grade() {
++        return $this->finalgrade + (float)$this->adjust_value;
++    }
++
++    public function anonymous_number() {
++        global $DB;
++
++        $params = array(
++            'userid' => $this->userid,
++            'fieldid' => $this->load_item()->anonymous_profile()
++        );
++
++        return $DB->get_field('user_info_data', 'data', $params);
++    }
++
++    public function bound_adjust_value($value) {
++        $max = abs($this->load_item()->adjust_boundary());
++        $min = -1 * $max;
++
++        if ($value < $min) {
++            return $min;
++        } else if ($value > $max) {
++            return $max;
++        } else {
++            return $value;
++        }
++    }
++
++    public function __call($name, $args) {
++        if ($u = $this->load_grade() and method_exists($u, $name)) {
++            return call_user_func_array(array($u, $name), $args);
++        }
++
++        return null;
++    }
++}
+diff --git a/lib/grade/grade_item.php b/lib/grade/grade_item.php
+index 3f8b273..7c92a0b 100644
+--- a/lib/grade/grade_item.php
++++ b/lib/grade/grade_item.php
+@@ -344,6 +344,9 @@ class grade_item extends grade_object {
+      * @return bool success
+      */
+     public function delete($source=null) {
++        if ($anon = grade_anonymous::fetch(array('itemid' => $this->id))) {
++            $anon->delete($source);
++        }
+         $this->delete_all_grades($source);
+         return parent::delete($source);
+     }
+@@ -1319,7 +1322,7 @@ class grade_item extends grade_object {
+      * @return mixed float or int fixed grade value
+      */
+     public function bounded_grade($gradevalue) {
+-        global $CFG;
++        global $CFG, $COURSE;
+ 
+         if (is_null($gradevalue)) {
+             return null;
+@@ -1336,14 +1339,16 @@ class grade_item extends grade_object {
+         // NOTE: if you change this value you must manually reset the needsupdate flag in all grade items
+         $maxcoef = isset($CFG->gradeoverhundredprocentmax) ? $CFG->gradeoverhundredprocentmax : 10; // 1000% max by default
+ 
+-        if (!empty($CFG->unlimitedgrades)) {
+-            // NOTE: if you change this value you must manually reset the needsupdate flag in all grade items
+-            $grademax = $grademax * $maxcoef;
+-        } else if ($this->is_category_item() or $this->is_course_item()) {
+-            $category = $this->load_item_category();
+-            if ($category->aggregation >= 100) {
+-                // grade >100% hack
++        if (!grade_anonymous::is_supported($COURSE)) {
++            if (!empty($CFG->unlimitedgrades)) {
++                // NOTE: if you change this value you must manually reset the needsupdate flag in all grade items
+                 $grademax = $grademax * $maxcoef;
++            } else if ($this->is_category_item() or $this->is_course_item()) {
++                $category = $this->load_item_category();
++                if ($category->aggregation >= 100) {
++                    // grade >100% hack
++                    $grademax = $grademax * $maxcoef;
++                }
+             }
+         }
+ 
+diff --git a/lib/gradelib.php b/lib/gradelib.php
+index 75a6f20..08e771e 100644
+--- a/lib/gradelib.php
++++ b/lib/gradelib.php
+@@ -32,6 +32,7 @@ require_once($CFG->libdir . '/grade/grade_item.php');
+ require_once($CFG->libdir . '/grade/grade_grade.php');
+ require_once($CFG->libdir . '/grade/grade_scale.php');
+ require_once($CFG->libdir . '/grade/grade_outcome.php');
++require_once($CFG->libdir . '/grade/grade_anonymous.php');
+ 
+ /////////////////////////////////////////////////////////////////////
+ ///// Start of public API for communication with modules/blocks /////
