@@ -1,0 +1,41 @@
+diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
+index c91394a..ccc21af 100644
+--- a/grade/report/grader/lib.php
++++ b/grade/report/grader/lib.php
+@@ -650,7 +650,11 @@ class grade_report_grader extends grade_report {
+                 $usercell->text = $OUTPUT->user_picture($user);
+             }
+ 
+-            $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), fullname($user));
++            if (isset($user->alternatename)) {
++                $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), $user->alternatename . ' (' . $user->firstname . ') ' . $user->lastname);
++            } else {
++                $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), fullname($user));
++            }
+ 
+             if (!empty($user->suspendedenrolment)) {
+                 $usercell->attributes['class'] .= ' usersuspended';
+@@ -1631,9 +1635,9 @@ class grade_report_grader extends grade_report {
+         $firstlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'firstname')), $strfirstname);
+         $lastlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'lastname')), $strlastname);
+ 
+-        $arrows['studentname'] = $lastlink;
++        $arrows['studentname'] = $firstlink;
+ 
+-        if ($this->sortitemid === 'lastname') {
++        if ($this->sortitemid === 'firstname') {
+             if ($this->sortorder == 'ASC') {
+                 $arrows['studentname'] .= $iconasc;
+             } else {
+@@ -1641,9 +1645,9 @@ class grade_report_grader extends grade_report {
+             }
+         }
+ 
+-        $arrows['studentname'] .= ' ' . $firstlink;
++        $arrows['studentname'] .= ' ' . $lastlink;
+ 
+-        if ($this->sortitemid === 'firstname') {
++        if ($this->sortitemid === 'lastname') {
+             if ($this->sortorder == 'ASC') {
+                 $arrows['studentname'] .= $iconasc;
+             } else {
