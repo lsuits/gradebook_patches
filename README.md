@@ -8,15 +8,21 @@ patch -p1 < /path/to/patch.patch
 ```
 #Patches for individual LSU gradebook features.
 1. anonymous_grades.patch
- 1. Requires quick edit.
- 1. Allows for truly anonymous grading of manual items within Moodle.
-  1. Graded items can only be adjusted by an administratively predefined adjustment value.
-  1. Requires students be assigned anonymous identifiers as optional profile fields.
- * LSU settings
-  * anon grading checked
-  * 'create anonymous field' and assign anon numbers to users
-  * set 'anonymous' as the anon field 
-  * anonymous categories set to anything
+   1. Requires quick edit.
+   1. Allows for truly anonymous grading of manual items within Moodle.
+     1. Graded items can only be adjusted by an administratively predefined adjustment value.
+     1. Requires students be assigned anonymous identifiers as optional profile fields.
+   * LSU settings
+     * anon grading checked
+     * 'create anonymous field' and assign anon numbers to users
+     * set 'anonymous' as the anon field 
+     * anonymous categories set to anything
+     * in 'Grade Item Settings' , check 'manual item recompute'
+     1. confirm that when creating a new grate item, that the 'anonymous item' check box appears when enabled in gradebook settings
+     1. create an anonymous grade item
+     1. in the grader report, verify that the anonymous grade is not editable
+     1. in QuickEdit, verify that an 'Anonymous Item' select is present.
+     1. 
 1. better_letters.patch
  1. Fixes hard-coded 2 decimal rounding bug.
  1. Allows admins to enable floating-point letter grade boundaries.
