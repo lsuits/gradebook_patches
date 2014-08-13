@@ -1286,7 +1286,7 @@ index ce3aa73..0d1950c 100644
 +$string['quick_edit'] = 'Integrate Quick Edit';
 +$string['quick_edit_desc'] = 'Creates _Quick edit_ links in the grader report.';
 diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
-index c91394a..396ad66 100644
+index c91394a..5c5287e 100644
 --- a/grade/report/grader/lib.php
 +++ b/grade/report/grader/lib.php
 @@ -95,6 +95,8 @@ class grade_report_grader extends grade_report {
@@ -1368,20 +1368,22 @@ index c91394a..396ad66 100644
  
              $usercell = new html_table_cell();
              $usercell->attributes['class'] = 'user';
-@@ -650,7 +681,11 @@ class grade_report_grader extends grade_report {
+@@ -650,7 +681,13 @@ class grade_report_grader extends grade_report {
                  $usercell->text = $OUTPUT->user_picture($user);
              }
  
 -            $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), fullname($user));
-+            if (isset($user->alternatename)) {
++            if (isset($CFG->grade_report_nameswap) && $CFG->grade_report_nameswap && !empty($user->alternatename)) {
 +                $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), $user->alternatename . ' (' . $user->firstname . ') ' . $user->lastname);
++            } else if (!empty($user->alternatename)) {
++                $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), $user->firstname . ' (' . $user->alternatename . ') ' . $user->lastname);
 +            } else {
 +                $usercell->text .= html_writer::link(new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $this->course->id)), fullname($user));
 +            }
  
              if (!empty($user->suspendedenrolment)) {
                  $usercell->attributes['class'] .= ' usersuspended';
-@@ -665,6 +700,23 @@ class grade_report_grader extends grade_report {
+@@ -665,6 +702,23 @@ class grade_report_grader extends grade_report {
  
              $userrow->cells[] = $usercell;
  
@@ -1405,7 +1407,7 @@ index c91394a..396ad66 100644
              if (has_capability('gradereport/'.$CFG->grade_profilereport.':view', $this->context)) {
                  $userreportcell = new html_table_cell();
                  $userreportcell->attributes['class'] = 'userreport';
-@@ -704,7 +756,7 @@ class grade_report_grader extends grade_report {
+@@ -704,7 +758,7 @@ class grade_report_grader extends grade_report {
       * @return array Array of html_table_row objects
       */
      public function get_right_rows($displayaverages) {
@@ -1414,7 +1416,7 @@ index c91394a..396ad66 100644
  
          $rows = array();
          $this->rowcount = 0;
-@@ -725,6 +777,8 @@ class grade_report_grader extends grade_report {
+@@ -725,6 +779,8 @@ class grade_report_grader extends grade_report {
          );
          $jsscales = array();
  
@@ -1423,7 +1425,7 @@ index c91394a..396ad66 100644
          foreach ($this->gtree->get_levels() as $key => $row) {
              $headingrow = new html_table_row();
              $headingrow->attributes['class'] = 'heading_name_row';
-@@ -789,17 +843,55 @@ class grade_report_grader extends grade_report {
+@@ -789,17 +845,55 @@ class grade_report_grader extends grade_report {
                          $arrow = $this->get_sort_arrow('move', $sortlink);
                      }
  
@@ -1481,7 +1483,7 @@ index c91394a..396ad66 100644
                      $itemcell->header = true;
                      $itemcell->scope = 'col';
  
-@@ -836,8 +928,23 @@ class grade_report_grader extends grade_report {
+@@ -836,8 +930,23 @@ class grade_report_grader extends grade_report {
  
          $rowclasses = array('even', 'odd');
  
@@ -1505,7 +1507,7 @@ index c91394a..396ad66 100644
              if ($this->canviewhidden) {
                  $altered = array();
                  $unknown = array();
-@@ -848,6 +955,7 @@ class grade_report_grader extends grade_report {
+@@ -848,6 +957,7 @@ class grade_report_grader extends grade_report {
                  unset($hidingaffected);
              }
  
@@ -1513,7 +1515,7 @@ index c91394a..396ad66 100644
              $itemrow = new html_table_row();
              $itemrow->id = 'user_'.$userid;
              $itemrow->attributes['class'] = $rowclasses[$this->rowcount % 2];
-@@ -882,6 +990,8 @@ class grade_report_grader extends grade_report {
+@@ -882,6 +992,8 @@ class grade_report_grader extends grade_report {
                      $jsarguments['grades'][] = array('user'=>$userid, 'item'=>$itemid, 'grade'=>$gradevalforjs);
                  }
  
@@ -1522,7 +1524,7 @@ index c91394a..396ad66 100644
                  // MDL-11274
                  // Hide grades in the grader report if the current grader doesn't have 'moodle/grade:viewhidden'
                  if (!$this->canviewhidden and $grade->is_hidden()) {
-@@ -910,6 +1020,11 @@ class grade_report_grader extends grade_report {
+@@ -910,6 +1022,11 @@ class grade_report_grader extends grade_report {
                      $itemcell->attributes['class'] .= ' overridden';
                  }
  
@@ -1534,7 +1536,7 @@ index c91394a..396ad66 100644
                  if (!empty($grade->feedback)) {
                      //should we be truncating feedback? ie $short_feedback = shorten_text($feedback, $this->feedback_trunc_length);
                      $jsarguments['feedback'][] = array('user'=>$userid, 'item'=>$itemid, 'content'=>wordwrap(trim(format_string($grade->feedback, $grade->feedbackformat)),
-@@ -920,8 +1035,12 @@ class grade_report_grader extends grade_report {
+@@ -920,8 +1037,12 @@ class grade_report_grader extends grade_report {
                      $itemcell->text .= html_writer::tag('span', get_string('excluded', 'grades'), array('class'=>'excludedfloater'));
                  }
  
@@ -1548,7 +1550,7 @@ index c91394a..396ad66 100644
                      $itemcell->text .= $this->get_icons($element);
                  }
  
-@@ -943,7 +1062,13 @@ class grade_report_grader extends grade_report {
+@@ -943,7 +1064,13 @@ class grade_report_grader extends grade_report {
                  if ($item->needsupdate) {
                      $itemcell->text .= html_writer::tag('span', get_string('error'), array('class'=>"gradingerror$hidden"));
  
@@ -1563,7 +1565,7 @@ index c91394a..396ad66 100644
  
                      if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
                          $scale = $scalesarray[$item->scaleid];
-@@ -1038,7 +1163,7 @@ class grade_report_grader extends grade_report {
+@@ -1038,7 +1165,7 @@ class grade_report_grader extends grade_report {
              $rows[] = $itemrow;
          }
  
@@ -1572,7 +1574,7 @@ index c91394a..396ad66 100644
              $jsarguments['cfg']['ajaxenabled'] = true;
              $jsarguments['cfg']['scales'] = array();
              foreach ($jsscales as $scale) {
-@@ -1234,14 +1359,16 @@ class grade_report_grader extends grade_report {
+@@ -1234,14 +1361,16 @@ class grade_report_grader extends grade_report {
              $iconsrow->attributes['class'] = 'controls';
  
              foreach ($this->gtree->items as $itemid => $unused) {
@@ -1591,7 +1593,7 @@ index c91394a..396ad66 100644
                  $iconsrow->cells[] = $itemcell;
              }
              $rows[] = $iconsrow;
-@@ -1354,6 +1481,7 @@ class grade_report_grader extends grade_report {
+@@ -1354,6 +1483,7 @@ class grade_report_grader extends grade_report {
                  }
              }
  
@@ -1599,7 +1601,7 @@ index c91394a..396ad66 100644
              // MDL-10875 Empty grades must be evaluated as grademin, NOT always 0
              // This query returns a count of ungraded grades (NULL finalgrade OR no matching record in grade_grades table)
              $sql = "SELECT gi.id, COUNT(DISTINCT u.id) AS count
-@@ -1364,7 +1492,7 @@ class grade_report_grader extends grade_report {
+@@ -1364,7 +1494,7 @@ class grade_report_grader extends grade_report {
                        JOIN {role_assignments} ra
                             ON ra.userid = u.id
                        LEFT OUTER JOIN {grade_grades} g
@@ -1608,7 +1610,7 @@ index c91394a..396ad66 100644
                        $groupsql
                       WHERE gi.courseid = :courseid
                             AND ra.roleid $gradebookrolessql
-@@ -1400,7 +1528,7 @@ class grade_report_grader extends grade_report {
+@@ -1400,7 +1530,7 @@ class grade_report_grader extends grade_report {
                      $ungradedcount = $ungradedcounts[$itemid]->count;
                  }
  
@@ -1617,7 +1619,7 @@ index c91394a..396ad66 100644
                      $meancount = $totalcount - $ungradedcount;
                  } else { // Bump up the sum by the number of ungraded items * grademin
                      $sumarray[$item->id] += $ungradedcount * $item->grademin;
-@@ -1471,7 +1599,17 @@ class grade_report_grader extends grade_report {
+@@ -1471,7 +1601,17 @@ class grade_report_grader extends grade_report {
          // Init all icons
          $editicon = '';
  
@@ -1636,7 +1638,7 @@ index c91394a..396ad66 100644
              $editicon = $this->gtree->get_edit_icon($element, $this->gpr);
          }
  
-@@ -1480,10 +1618,13 @@ class grade_report_grader extends grade_report {
+@@ -1480,10 +1620,13 @@ class grade_report_grader extends grade_report {
          $lockunlockicon      = '';
  
          if (has_capability('moodle/grade:manage', $this->context)) {
@@ -1652,7 +1654,7 @@ index c91394a..396ad66 100644
              if ($this->get_pref('showeyecons')) {
                  $showhideicon = $this->gtree->get_hiding_icon($element, $this->gpr);
              }
-@@ -1609,6 +1750,25 @@ class grade_report_grader extends grade_report {
+@@ -1609,6 +1752,25 @@ class grade_report_grader extends grade_report {
          return $CFG->grade_report_fixedstudents;
      }
  
@@ -1678,7 +1680,7 @@ index c91394a..396ad66 100644
      /**
       * Refactored function for generating HTML of sorting links with matching arrows.
       * Returns an array with 'studentname' and 'idnumber' as keys, with HTML ready
-@@ -1631,9 +1791,9 @@ class grade_report_grader extends grade_report {
+@@ -1631,9 +1793,9 @@ class grade_report_grader extends grade_report {
          $firstlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'firstname')), $strfirstname);
          $lastlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'lastname')), $strlastname);
  
@@ -1690,7 +1692,7 @@ index c91394a..396ad66 100644
              if ($this->sortorder == 'ASC') {
                  $arrows['studentname'] .= $iconasc;
              } else {
-@@ -1641,9 +1801,9 @@ class grade_report_grader extends grade_report {
+@@ -1641,9 +1803,9 @@ class grade_report_grader extends grade_report {
              }
          }
  
@@ -1702,7 +1704,7 @@ index c91394a..396ad66 100644
              if ($this->sortorder == 'ASC') {
                  $arrows['studentname'] .= $iconasc;
              } else {
-@@ -1676,5 +1836,73 @@ class grade_report_grader extends grade_report {
+@@ -1676,5 +1838,73 @@ class grade_report_grader extends grade_report {
      public function get_students_per_page() {
          return $this->get_pref('studentsperpage');
      }
@@ -1836,7 +1838,7 @@ index ba2cb24..e9b0035 100644
                  }
                  $mform->setDefault($full_pref, $pref_value);
 diff --git a/grade/report/grader/settings.php b/grade/report/grader/settings.php
-index d1b02af..39c28ea 100644
+index d1b02af..b8252d9 100644
 --- a/grade/report/grader/settings.php
 +++ b/grade/report/grader/settings.php
 @@ -38,9 +38,18 @@ if ($ADMIN->fulltree) {
@@ -1889,8 +1891,15 @@ index d1b02af..39c28ea 100644
      $settings->add(new admin_setting_configcheckbox('grade_report_showuserimage', get_string('showuserimage', 'grades'),
                                                  get_string('showuserimage_help', 'grades'), 1));
  
+@@ -115,4 +132,6 @@ if ($ADMIN->fulltree) {
+                                                      '4' => '4',
+                                                      '5' => '5')));
+ 
++    $settings->add(new admin_setting_configcheckbox('grade_report_nameswap', get_string('nameswap', 'grades'),
++                                                get_string('nameswap_help', 'grades'), 0));
+ }
 diff --git a/grade/report/grader/version.php b/grade/report/grader/version.php
-index 9b31002..87ce316 100644
+index 9b31002..40e1c64 100644
 --- a/grade/report/grader/version.php
 +++ b/grade/report/grader/version.php
 @@ -24,6 +24,6 @@
@@ -1902,7 +1911,7 @@ index 9b31002..87ce316 100644
  $plugin->requires  = 2014050800;        // Requires this Moodle version
  $plugin->component = 'gradereport_grader'; // Full name of the plugin (used for diagnostics)
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..723eb00 100644
+index 9ea00eb..0710825 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
 @@ -82,8 +82,22 @@ $string['aggregationposition_help'] = 'This setting determines whether the categ
@@ -2001,7 +2010,7 @@ index 9ea00eb..723eb00 100644
  $string['missingscale'] = 'Scale must be selected';
  $string['mode'] = 'Mode';
  $string['modgradeerrorbadpoint'] = 'Invalid Grade Value. This must be an integer between 0 and {$a}';
-@@ -431,6 +465,9 @@ $string['morethanmax'] = 'The grade entered for {$a->itemname} for {$a->username
+@@ -431,16 +465,23 @@ $string['morethanmax'] = 'The grade entered for {$a->itemname} for {$a->username
  $string['moveselectedto'] = 'Move selected items to';
  $string['movingelement'] = 'Moving {$a}';
  $string['multfactor'] = 'Multiplicator';
@@ -2011,7 +2020,12 @@ index 9ea00eb..723eb00 100644
  $string['multfactorvalue'] = 'Multiplicator value for {$a}';
  $string['multfactor_help'] = 'The multiplicator is the factor by which all grades for this grade item will be multiplied, with a maximum value of the maximum grade. For example, if the multiplicator is 2 and the maximum grade is 100, then all grades less than 50 are multiplied by 2, and all grades 50 and above are changed to 100.';
  $string['mypreferences'] = 'My preferences';
-@@ -441,6 +478,8 @@ $string['newcategory'] = 'New category';
+ $string['myreportpreferences'] = 'My report preferences';
++$string['nameswap'] = 'Name swap';
++$string['nameswap_help'] = 'For schools that allow users to modify their first name in the case of non-legal name changes, this setting allows schools to display names as the student prefers in most places, but shows "Alternate (First) Last" nams inside the grader and Quick Edit report.';
+ $string['navmethod'] = 'Navigation method';
+ $string['neverdeletehistory'] = 'Never delete history';
+ $string['newcategory'] = 'New category';
  $string['newitem'] = 'New grade item';
  $string['newoutcomeitem'] = 'New outcome item';
  $string['no'] = 'No';
@@ -2020,7 +2034,7 @@ index 9ea00eb..723eb00 100644
  $string['nocategories'] = 'Grade categories could not be added or found for this course';
  $string['nocategoryname'] = 'No category name was given.';
  $string['nocategoryview'] = 'No category to view by';
-@@ -492,6 +531,8 @@ $string['outcomesstandardavailable'] = 'Available standard outcomes';
+@@ -492,6 +533,8 @@ $string['outcomesstandardavailable'] = 'Available standard outcomes';
  $string['outcomestandard'] = 'Standard outcome';
  $string['outcomestandard_help'] = 'A standard outcome is available site-wide, for all courses.';
  $string['overallaverage'] = 'Overall average';
@@ -2029,7 +2043,7 @@ index 9ea00eb..723eb00 100644
  $string['overridden'] = 'Overridden';
  $string['overridden_help'] = 'If ticked, the grade can no longer be changed from within the related activity.
  
-@@ -545,6 +586,8 @@ $string['recovergradesdefault_help'] = 'By default recover old grades when re-en
+@@ -545,6 +588,8 @@ $string['recovergradesdefault_help'] = 'By default recover old grades when re-en
  $string['regradeanyway'] = 'Regrade anyway';
  $string['removeallcoursegrades'] = 'Delete all grades';
  $string['removeallcourseitems'] = 'Delete all items and categories';
@@ -2038,7 +2052,7 @@ index 9ea00eb..723eb00 100644
  $string['report'] = 'Report';
  $string['reportdefault'] = 'Report default ({$a})';
  $string['reportplugins'] = 'Report plugins';
-@@ -588,6 +631,8 @@ $string['showrange'] = 'Show ranges';
+@@ -588,6 +633,8 @@ $string['showrange'] = 'Show ranges';
  $string['showrange_help'] = 'Show the range column?';
  $string['showweight'] = 'Show weightings';
  $string['showweight_help'] = 'Show the grade weight column?';
@@ -2047,7 +2061,7 @@ index 9ea00eb..723eb00 100644
  $string['rangedecimals'] = 'Range decimal points';
  $string['rangedecimals_help'] = 'The number of decimal points to display for range.';
  $string['showactivityicons'] = 'Show activity icons';
-@@ -598,6 +643,7 @@ $string['showaverages'] = 'Show column averages';
+@@ -598,6 +645,7 @@ $string['showaverages'] = 'Show column averages';
  $string['showaverages_help'] = 'If enabled, the grader report will contain an additional row displaying the average (mean) for each category and grade item.';
  $string['showcalculations'] = 'Show calculations';
  $string['showcalculations_help'] = 'If enabled, when editing is turned on, a calculator icon is shown for each grade item and category, with tool tips over calculated items and a visual indicator that a column is calculated.';
@@ -2055,7 +2069,7 @@ index 9ea00eb..723eb00 100644
  $string['showeyecons'] = 'Show show/hide icons';
  $string['showeyecons_help'] = 'If enabled, when editing is turned on, a show/hide icon is shown for each grade for controlling its visibility to the student.';
  $string['showgroups'] = 'Show groups';
-@@ -688,7 +734,13 @@ $string['useweighted'] = 'Use weighted';
+@@ -688,7 +736,13 @@ $string['useweighted'] = 'Use weighted';
  $string['verbosescales'] = 'Verbose scales';
  $string['viewbygroup'] = 'Group';
  $string['viewgrades'] = 'View grades';
