@@ -10,23 +10,34 @@ patch -p1 < /path/to/patch.patch
 1. anonymous_grades.patch
    1. Requires quick edit.
    1. Allows for truly anonymous grading of manual items within Moodle.
-     1. Graded items can only be adjusted by an administratively predefined adjustment value.
-     1. Requires students be assigned anonymous identifiers as optional profile fields.
+      1. Graded items can only be adjusted by an administratively predefined adjustment value.
+      1. Requires students be assigned anonymous identifiers as optional profile fields.
    * LSU settings
-     * anon grading checked
-     * 'create anonymous field' and assign anon numbers to users
-     * set 'anonymous' as the anon field 
-     * anonymous categories set to anything
-     * in 'Grade Item Settings' , check 'manual item recompute'
-     1. confirm that when creating a new grate item, that the 'anonymous item' check box appears when enabled in gradebook settings
-     1. create an anonymous grade item
-     1. in the grader report, verify that the anonymous grade is not editable
-     1. in QuickEdit, verify that an 'Anonymous Item' select is present.
-     1. 
-1. better_letters.patch
- 1. Fixes hard-coded 2 decimal rounding bug.
- 1. Allows admins to enable floating-point letter grade boundaries.
- 1. Allows admins to enable system wide letter dropdowns.
+      * anon grading checked
+      * 'create anonymous field' and assign anon numbers to users
+      * set 'anonymous' as the anon field 
+      * anonymous categories set to anything
+      * in 'Grade Item Settings' , check 'manual item recompute'
+  1. LSU testing steps
+      1. confirm that when creating a new grate item, that the 'anonymous item' check box appears when enabled in gradebook settings
+      1. create an anonymous grade item
+      1. in the grader report, verify that the anonymous grade is not editable
+      1. in QuickEdit, verify that an 'Anonymous Item' select is present.
+      2. ensure that the anonymous adjustment value is reflected in the grader report
+      3. test unlimited grades
+         4. if a grade item is in an anon category and unlimited grades are turned on
+         5. verify that you cannot exeed the max grade,despite the 'unlimited' setting
+6. better_letters.patch
+   1. Fixes hard-coded 2 decimal rounding bug.
+   1. Allows admins to enable floating-point letter grade boundaries.
+   1. Allows admins to enable system wide letter dropdowns.
+   2. LSU Config
+      3. enable custom %, go back to 'letters'
+      4. edit letter grades, notice that we can put in anything we want
+      5. in letter edit settings,check strict letter names
+      6. back in letters, edit, and ensure that only the letters of the scale are allowed
+      7. now in a course, in gb settings, select letter > 'real'
+      8. ensure that the letters appear correctly in the grader report
 1. column_avg_no_zero.patch
  1. Allows faculty to omit explicitly marked 0 grades form column averages as well as empty grades for better column averages.
 1. coursecat_editable.patch
