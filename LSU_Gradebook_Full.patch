@@ -470,52 +470,54 @@ index 852fdd5..1b0030f 100644
      // If the user leaves these fields empty during creation of a category, we let the default values take effect
      // Otherwise, we let the user-entered grade item values take effect
 diff --git a/grade/edit/tree/category_form.php b/grade/edit/tree/category_form.php
-index 950e3bf..463f0fe 100644
+index 950e3bf..09d8c39 100644
 --- a/grade/edit/tree/category_form.php
 +++ b/grade/edit/tree/category_form.php
-@@ -174,6 +174,41 @@ class edit_category_form extends moodleform {
+@@ -173,6 +173,43 @@ class edit_category_form extends moodleform {
+         $mform->addHelpButton('grade_item_gradepass', 'gradepass', 'grades');
          $mform->disabledIf('grade_item_gradepass', 'grade_item_gradetype', 'eq', GRADE_TYPE_NONE);
          $mform->disabledIf('grade_item_gradepass', 'grade_item_gradetype', 'eq', GRADE_TYPE_TEXT);
- 
-+        if (get_config('moodle', 'grade_multfactor_alt')) {
-+            $curve_to = get_string('multfactor_alt', 'grades');
-+            $perform_curve = get_string('allow_multfactor_alt', 'grades');
++        if (get_config('moodle', 'manipulate_categories')) {
++            if (get_config('moodle', 'grade_multfactor_alt')) {
++                $curve_to = get_string('multfactor_alt', 'grades');
++                $perform_curve = get_string('allow_multfactor_alt', 'grades');
 +
-+            $mform->addElement('checkbox', 'curve_to', $perform_curve,'');
++                $mform->addElement('checkbox', 'curve_to', $perform_curve,'');
 +
-+            $mform->setAdvanced('curve_to');
++                $mform->setAdvanced('curve_to');
 +
-+            $mform->addElement('text', 'grade_item_multfactor', $curve_to);
++                $mform->addElement('text', 'grade_item_multfactor', $curve_to);
++                $mform->setType('grade_item_multfactor', PARAM_FLOAT);
++
++                $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_NONE);
++                $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_TEXT);
++
++                $mform->disabledIf('grade_item_multfactor', 'curve_to', 'notchecked');
++                $mform->addHelpButton(
++                    'grade_item_multfactor', 'multfactor_alt',
++                    'grades', null
++                );
++            } else {
++                $mform->addElement('text', 'grade_item_multfactor', get_string('multfactor', 'grades'));
++                $mform->addHelpButton('grade_item_multfactor', 'grade_item_multfactor', 'grades');
++            }
++
++            $mform->setAdvanced('grade_item_multfactor');
 +            $mform->setType('grade_item_multfactor', PARAM_FLOAT);
++            $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
++            $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
 +
-+            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_NONE);
-+            $mform->disabledIf('curve_to', 'gradetype', 'eq', GRADE_TYPE_TEXT);
-+
-+            $mform->disabledIf('grade_item_multfactor', 'curve_to', 'notchecked');
-+            $mform->addHelpButton(
-+                'grade_item_multfactor', 'multfactor_alt',
-+                'grades', null
-+            );
-+        } else {
-+            $mform->addElement('text', 'grade_item_multfactor', get_string('multfactor', 'grades'));
-+            $mform->addHelpButton('grade_item_multfactor', 'grade_item_multfactor', 'grades');
++            $mform->addElement('text', 'grade_item_plusfactor', get_string('plusfactor', 'grades'));
++            $mform->setType('grade_item_plusfactor', PARAM_FLOAT);
++            $mform->addHelpButton('grade_item_plusfactor', 'plusfactor', 'grades');
++            $mform->setAdvanced('grade_item_plusfactor');
++            $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
++            $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
 +        }
-+
-+        $mform->setAdvanced('grade_item_multfactor');
-+        $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
-+        $mform->disabledIf('grade_item_multfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
-+
-+        $mform->addElement('text', 'grade_item_plusfactor', get_string('plusfactor', 'grades'));
-+        $mform->setType('grade_item_plusfactor', PARAM_FLOAT);
-+        $mform->addHelpButton('grade_item_plusfactor', 'plusfactor', 'grades');
-+        $mform->setAdvanced('grade_item_plusfactor');
-+        $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_NONE);
-+        $mform->disabledIf('grade_item_plusfactor', 'gradetype', 'eq', GRADE_TYPE_TEXT);
-+
+ 
          /// grade display prefs
          $default_gradedisplaytype = grade_get_setting($COURSE->id, 'displaytype', $CFG->grade_displaytype);
-         $options = array(GRADE_DISPLAY_TYPE_DEFAULT            => get_string('default', 'grades'),
-@@ -361,8 +396,17 @@ class edit_category_form extends moodleform {
+@@ -361,8 +398,17 @@ class edit_category_form extends moodleform {
  
              // If it is a course category and its fullname is ?, show an empty field
              if ($grade_category->is_course_category() && $mform->getElementValue('fullname') == '?') {
@@ -534,7 +536,7 @@ index 950e3bf..463f0fe 100644
              // remove unwanted aggregation options
              if ($mform->elementExists('aggregation')) {
                  $allaggoptions = array_keys($this->aggregation_options);
-@@ -455,6 +499,11 @@ class edit_category_form extends moodleform {
+@@ -455,6 +501,11 @@ class edit_category_form extends moodleform {
                  }
              }
          }
