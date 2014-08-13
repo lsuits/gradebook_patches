@@ -12,6 +12,11 @@ patch -p1 < /path/to/patch.patch
  1. Allows for truly anonymous grading of manual items within Moodle.
   1. Graded items can only be adjusted by an administratively predefined adjustment value.
   1. Requires students be assigned anonymous identifiers as optional profile fields.
+ * LSU settings
+  * anon grading checked
+  * 'create anonymous field' and assign anon numbers to users
+  * set 'anonymous' as the anon field 
+  * anonymous categories set to anything
 1. better_letters.patch
  1. Fixes hard-coded 2 decimal rounding bug.
  1. Allows admins to enable floating-point letter grade boundaries.
@@ -56,3 +61,14 @@ patch -p1 < /path/to/patch.patch
  1. Fixes the bug where users have the option to create manual items with NO GRADE grading type.
 1. wm_extra_credit.patch
  1. Allows for extra credit in the weighted mean aggregation method.
+
+
+## LSU Configuration
+
+### Test Setup
+* 1 course
+ * 1 teacher
+ * 2 students
+ * 1 group
+* build graedbook with gb_builder 
+  * add categories with weights homework (10%), paper(40%), exam(30%) and quiz(20%)
