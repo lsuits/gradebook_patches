@@ -1898,7 +1898,7 @@ index 9b31002..87ce316 100644
  defined('MOODLE_INTERNAL') || die();
  
 -$plugin->version   = 2014051200;        // The current plugin version (Date: YYYYMMDDXX)
-+$plugin->version   = 2014051202;        // The current plugin version (Date: YYYYMMDDXX)
++$plugin->version   = 2014060401;        // The current plugin version (Date: YYYYMMDDXX)
  $plugin->requires  = 2014050800;        // Requires this Moodle version
  $plugin->component = 'gradereport_grader'; // Full name of the plugin (used for diagnostics)
 diff --git a/lang/en/grades.php b/lang/en/grades.php
