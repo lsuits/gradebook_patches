@@ -51,12 +51,8 @@ patch -p1 < /path/to/patch.patch
 
 1. coursecat_editable.patch
    1. Allows admin to disable the ability for users to rename their course category.
-   2. Turn editing on, ensure course categories are not editable
-   3. in grades settings,enable edit cat totals
-      4. ensure that cat totals are editable
-   5. disable cat totals
-      6. ensure you can't edit cat totatl in the g report
-      7. ensure that cat totals are not editable in the QE
+   2. LSU
+      3. enable and notice that course cat is not editable and takes name of course
 1. curve-to.patch
    1. Changes multiplicator into a more user friendly curve-to option.
       1. Example: max points for an item is 75, instructor can curve-to 100, enabling a 1.33333 multiplicator behind the scenes.
@@ -95,24 +91,58 @@ patch -p1 < /path/to/patch.patch
    1. Allows the administrator to hide the minimum grade feature in Moodle for non-scale items.
    2. LSU
       3. grade item settings - 'hide minimum grade'
-      4. 
+      4. check for lsu theme disaply:none
+      5. notice that min grade is not frozen w/o 'hidemin' checked
+      6. with 'hide min' set,notice that the minimum cannot be edited
+      7. re-enable the theme/lsu/grade.css and notice that min grade is not displayed
 1. keephigh_OR_droplow.patch
    1. Disallows the user from using keep high or drop low if the other has been used for a category.
+   2. LSU
+      3. keep highest: none, not-forced,advanced
+      4. notice that if keep highest is set,drop lowest is unavailable.
 1. manual_rawgrade.patch
    1. Allows the administrator to configure manual items to behave like all other graded items in Moodle.
       1. Users can use offseet and multiplicator with manual items with this patch.
+      2. LSU un-check 'man item recompute'
+         3. notice that curve-to, offset are not availa in the grader report
+         4. with this checked,man items use raw grade,hence manipulable via curve-to,etc
 1. override_cat.patch
    1. Allows admin to disable the ability for users to override course category totals.
+   2. LSU
+      2. Turn editing on, ensure course categories are not editable
+      3. in grades settings,enable edit cat totals
+         4. ensure that cat totals are editable
+      5. disable cat totals
+         6. ensure you can't edit cat totatl in the g report
+         7. ensure that cat totals are not editable in the QE
 1. quick_edit_integration.patch
    1. Integrates quick edit links in editable item row headers and in student rows.
+   2. LSU
+      3. grader report - settings: 'integrate quick edit'
+      4. notice that grader report has link for QE on each itemand in the user column
 1. repeat_headers.patch
    1. Allows for admin default and user configurable repeating of grader report headers every N rows.
+   2. LSU
+      3. set the repeat headers setting to somenumber
+      4. verify that headers repeat system-wide
+      5. set user-preferences and ensure that local setting overrides global
+      6. ensure that 0 disables repeat
 1. show_weights.patch
    1. Allow admin or end user to show actual weights of items within the grader report.
+   2. LSU
+      3. check 'show weighted percents' - show s weight of an item in relation to its parent
+         4. verify weights show; make changes and verify they areapprop; ec items have no weight
 1. student_privacy.patch
    1. Enables admins to require that teachers agree to protect student rights when downloading grades.
+   2. LSU
+      3. uncheck 'student privacy' 
+         4. export grades and notice that there is no warning
+      5. re-check 'stu priv'
+         6. notice the 'accept' checkbox and that form submissionfails without it
 1. swm_ec_weight.patch
    1. Enables the administrator to enable or disable weighted extra credit when the simple weighted mean aggregation method is used.
+   2. LSU
+      3. 
 1. ungraded_manual.patch
    1. Fixes the bug where users have the option to create manual items with NO GRADE grading type.
 1. wm_extra_credit.patch
