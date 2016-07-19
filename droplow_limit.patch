@@ -1,35 +1,38 @@
 diff --git a/admin/settings/grades.php b/admin/settings/grades.php
-index 6d12d99..1da8072 100644
+index c95c5fd..4d5d02e 100644
 --- a/admin/settings/grades.php
 +++ b/admin/settings/grades.php
-@@ -125,6 +125,11 @@ if (has_capability('moodle/grade:manage', $systemcontext)
-         $defaults['forced'] = false;
+@@ -137,6 +137,11 @@ if (has_capability('moodle/grade:manage', $systemcontext)
          $temp->add(new admin_setting_gradecat_combo('grade_droplow', new lang_string('droplow', 'grades'),
                      new lang_string('droplow_help', 'grades'), $defaults, $options));
-+
+ 
 +        $temp->add(new admin_setting_configcheckbox('grade_droplow_limit',
 +            new lang_string('droplow_limit', 'grades'),
 +            new lang_string('droplow_limit_help', 'grades'), 0)
 +        );
++
+         $temp->add(new admin_setting_configcheckbox('grade_overridecat', new lang_string('overridecat', 'grades'),
+                    new lang_string('overridecat_help', 'grades'), 1));
      }
-     $ADMIN->add('grades', $temp);
- 
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..4cc4ec3 100644
+index 1a5b3ce..838a2a3 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
-@@ -703,3 +703,5 @@ $string['writinggradebookinfo'] = 'Writing gradebook settings';
- $string['xml'] = 'XML';
- $string['yes'] = 'Yes';
+@@ -816,6 +816,8 @@ $string['yes'] = 'Yes';
  $string['yourgrade'] = 'Your grade';
+ $string['coursecateditable'] = 'Course category editable';
+ $string['coursecateditable_help'] = 'Disabling will make the course category name an uneditable field.';
 +$string['droplow_limit'] = 'Drop the lowest limit';
 +$string['droplow_limit_help'] = 'By applying this setting, the drop setting will be ignored until the number of droppable grades are > than the drop number.';
+ 
+ // BEGIN LSU Better Letters
+ $string['letterscustompercents'] = 'Custom Percentages';
 diff --git a/lib/grade/grade_category.php b/lib/grade/grade_category.php
-index d5a9e6d..9f95776 100644
+index 2b19c3e..bca2b77 100644
 --- a/lib/grade/grade_category.php
 +++ b/lib/grade/grade_category.php
-@@ -875,6 +875,12 @@ class grade_category extends grade_object {
-         $extraused = $this->is_extracredit_used();
+@@ -1783,6 +1783,12 @@ class grade_category extends grade_object {
+         $isweightedmean = $this->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN;
  
          if (!empty($this->droplow)) {
 +            $limit = (bool)get_config('moodle', 'grade_droplow_limit');
