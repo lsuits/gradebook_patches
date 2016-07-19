@@ -14,7 +14,7 @@ index 7ee5cbe..1e891cc 100644
  
          if (!empty($data->rescalegrades) && $data->rescalegrades == 'yes') {
 diff --git a/grade/edit/tree/item_form.php b/grade/edit/tree/item_form.php
-index 572faa3..d3eedadd 100644
+index 572faa3..d3eedad 100644
 --- a/grade/edit/tree/item_form.php
 +++ b/grade/edit/tree/item_form.php
 @@ -347,7 +347,7 @@ class edit_item_form extends moodleform {
@@ -67,7 +67,7 @@ index 572faa3..d3eedadd 100644
              }
  
 diff --git a/grade/edit/tree/lib.php b/grade/edit/tree/lib.php
-index bf4a4a6..4304a22 100644
+index bf4a4a6..4bdd652 100644
 --- a/grade/edit/tree/lib.php
 +++ b/grade/edit/tree/lib.php
 @@ -392,11 +392,17 @@ class grade_edit_tree {
@@ -76,7 +76,7 @@ index bf4a4a6..4304a22 100644
          if ($aggcoef == 'aggregationcoefweight' || $aggcoef == 'aggregationcoef' || $aggcoef == 'aggregationcoefextraweight') {
 +
 +            if ($aggcoef == 'aggregationcoefweight' && $item->aggregationcoef < 0) {
-+                $ec = get_string('aggregationcoefextrasum', 'grades');
++                $ec = get_string('aggregationhintextra', 'grades');
 +                return $ec;
 +            }
 +
@@ -97,18 +97,41 @@ index bf4a4a6..4304a22 100644
              }
  
              foreach($element['children'] as $child_el) {
-@@ -726,6 +733,9 @@ class grade_edit_tree_column_weight extends grade_edit_tree_column {
+@@ -707,6 +714,11 @@ class grade_edit_tree_column_weight extends grade_edit_tree_column {
+         $item = $category->get_grade_item();
+         $categorycell = parent::get_category_cell($category, $levelclass, $params);
+         $categorycell->text = grade_edit_tree::get_weight_input($item);
++        $parent_cat = $item->load_parent_category();
++        $grandparent_cat = $parent_cat->load_parent_category();
++        if (($parent_cat->aggregation == GRADE_AGGREGATE_SUM && $grandparent_cat->aggregation != GRADE_AGGREGATE_WEIGHTED_MEAN && $item->aggregationcoef == 1 && ($item->aggregationcoef2 == 0 || $item->weightoverride == 1))) {
++            $categorycell->text = get_string('aggregationhintextra', 'grades');
++        }
+         return $categorycell;
+     }
+ 
+@@ -726,6 +738,16 @@ class grade_edit_tree_column_weight extends grade_edit_tree_column {
              $itemcell->text = grade_edit_tree::get_weight_input($item);
          }
  
-+        if ($object->load_parent_category()->aggregation == GRADE_AGGREGATE_SUM && $item->aggregationcoef == 1) {
-+            $itemcell = 'Extra credit';
++        $parent_cat = $object->load_parent_category();
++        $grandparent_cat = $parent_cat->load_parent_category();
++        if ($parent_cat->aggregation == GRADE_AGGREGATE_SUM && $object->itemtype != 'category' && $item->aggregationcoef == 1 && ($item->aggregationcoef2 == 0 || $item->weightoverride == 1)) {
++            $itemcell->text = get_string('aggregationhintextra', 'grades');
 +        }
++
++        if ($parent_cat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN2 && $item->aggregationcoef == 1) {
++            $itemcell->text = get_string('aggregationhintextra', 'grades');
++        }
++
          return $itemcell;
      }
  }
-@@ -785,9 +795,11 @@ class grade_edit_tree_column_range extends grade_edit_tree_column {
-                 if ($grandparentcat->is_extracredit_used()) {
+@@ -782,16 +804,20 @@ class grade_edit_tree_column_range extends grade_edit_tree_column {
+             // The parent is just category the grade item represents.
+             if ($item->is_category_item()) {
+                 $grandparentcat = $parentcat->get_parent_category();
+-                if ($grandparentcat->is_extracredit_used()) {
++                if ($grandparentcat->is_extracredit_used() && $grandparentcat->aggregation != GRADE_AGGREGATE_WEIGHTED_MEAN) {
                      $isextracredit = true;
                  }
 -            } else if ($parentcat->is_extracredit_used()) {
@@ -117,9 +140,57 @@ index bf4a4a6..4304a22 100644
              }
 +        } else if ($parentcat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN && $item->aggregationcoef < 0) {
 +            $isextracredit = true;
++        } else if ($item->aggregationcoef < 0) {
++            $isextracredit = true;
          }
          if ($isextracredit) {
              $grademax .= ' ' . html_writer::tag('abbr', get_string('aggregationcoefextrasumabbr', 'grades'),
+-                array('title' => get_string('aggregationcoefextrasum', 'grades')));
++                array('title' => get_string('aggregationhintextra', 'grades')));
+         }
+ 
+         $itemcell = parent::get_item_cell($item, $params);
+diff --git a/grade/report/user/lib.php b/grade/report/user/lib.php
+index 65f66a6..4c64e92 100644
+--- a/grade/report/user/lib.php
++++ b/grade/report/user/lib.php
+@@ -514,8 +514,34 @@ class grade_report_user extends grade_report {
+                     if (is_numeric($hint['weight'])) {
+                         $data['weight']['content'] = format_float($hint['weight'] * 100.0, 2) . ' %';
+                     }
+-                    if ($hint['status'] != 'used' && $hint['status'] != 'unknown') {
+-                        $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                    $gradecat = $grade_object->load_parent_category();
++                    $grandcat = $gradecat->load_parent_category();
++                    if (($gradecat->aggregation == GRADE_AGGREGATE_SUM) && $grade_object->itemtype != 'category') {
++                        if ($hint['status'] != 'used' && $hint['status'] != 'unknown') {
++                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                        }
++                        if ($hint['status'] == 'extra') {
++                            $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
++                        }
++                    } 
++                    if ($gradecat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN) {
++                        if ($hint['status'] == 'used') {
++                            $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
++                        }
++                        if ($hint['status'] == 'novalue') {
++                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                        }
++                    }
++                    if ($gradecat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN2 && $grade_object->aggregationcoef == 1) {
++                        if ($hint['status'] != 'used' && $hint['status'] != 'unknown') {
++                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                        }
++                        if ($hint['status'] == 'extra') {
++                            $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
++                        }
++                    }
++                    if (($gradecat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN || $grandcat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN) && $grade_object->itemtype == 'category' && $grade_object->aggregationcoef < 0) {
++                            $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
+                     }
+                 }
+ 
 diff --git a/lib/grade/grade_category.php b/lib/grade/grade_category.php
 index 7ad1284..2b19c3e 100644
 --- a/lib/grade/grade_category.php
