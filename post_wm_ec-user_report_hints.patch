@@ -1,0 +1,30 @@
+diff --git a/grade/report/user/lib.php b/grade/report/user/lib.php
+index 2360e94..10dc755 100644
+--- a/grade/report/user/lib.php
++++ b/grade/report/user/lib.php
+@@ -518,7 +518,7 @@ class grade_report_user extends grade_report {
+                     $grandcat = $gradecat->load_parent_category();
+                     if (($gradecat->aggregation == GRADE_AGGREGATE_SUM)) {
+                         if ($hint['status'] != 'used' && $hint['status'] != 'unknown') {
+-                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                            $data['weight']['content'] = get_string('aggregationhint' . $hint['status'], 'grades');
+                         }
+                         if ($hint['status'] == 'extra') {
+                             $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
+@@ -528,13 +528,13 @@ class grade_report_user extends grade_report {
+                         if ($hint['status'] == 'used') {
+                             $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
+                         }
+-                        if ($hint['status'] == 'novalue') {
+-                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                        if ($hint['status'] != 'used' && $hint['status'] != 'extra' && $hint['status'] != 'unknown') {
++                            $data['weight']['content'] = get_string('aggregationhint' . $hint['status'], 'grades');
+                         }
+                     }
+                     if ($gradecat->aggregation == GRADE_AGGREGATE_WEIGHTED_MEAN2) {
+                         if ($hint['status'] != 'used' && $hint['status'] != 'unknown') {
+-                            $data['weight']['content'] .= '<br>' . get_string('aggregationhint' . $hint['status'], 'grades');
++                            $data['weight']['content'] = get_string('aggregationhint' . $hint['status'], 'grades');
+                         }
+                         if ($hint['status'] == 'extra') {
+                             $data['weight']['content'] = get_string('aggregationhintextra', 'grades');
