@@ -1,10 +1,10 @@
 diff --git a/admin/settings/grades.php b/admin/settings/grades.php
-index 6d12d99..dcae382 100644
+index 4d5d02e..c20c067 100644
 --- a/admin/settings/grades.php
 +++ b/admin/settings/grades.php
-@@ -135,6 +135,16 @@ if (has_capability('moodle/grade:manage', $systemcontext)
-         $temp->add(new admin_setting_configselect('grade_displaytype', new lang_string('gradedisplaytype', 'grades'),
-                                                   new lang_string('gradedisplaytype_help', 'grades'), GRADE_DISPLAY_TYPE_REAL, $display_types));
+@@ -49,6 +49,16 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+         $temp->add(new admin_setting_configselect('grade_export_displaytype', new lang_string('gradeexportdisplaytype', 'grades'),
+                                                   new lang_string('gradeexportdisplaytype_desc', 'grades'), GRADE_DISPLAY_TYPE_REAL, $display_types));
  
 +        $temp->add(new admin_setting_configcheckbox('grade_item_manual_recompute',
 +            new lang_string('gradeitemmanualrecompute', 'grades'),
@@ -16,12 +16,12 @@ index 6d12d99..dcae382 100644
 +                new lang_string('manipulatecategories_help', 'grades'), 0));
 +        }
 +
-         $temp->add(new admin_setting_configselect('grade_decimalpoints', new lang_string('decimalpoints', 'grades'),
-                                                   new lang_string('decimalpoints_help', 'grades'), 2,
+         $temp->add(new admin_setting_configselect('grade_export_decimalpoints', new lang_string('gradeexportdecimalpoints', 'grades'),
+                                                   new lang_string('gradeexportdecimalpoints_desc', 'grades'), 2,
                                                    array( '0' => '0',
 diff --git a/grade/report/grader/db/upgrade.php b/grade/report/grader/db/upgrade.php
 new file mode 100644
-index 0000000..fdfe40f
+index 0000000..83de113
 --- /dev/null
 +++ b/grade/report/grader/db/upgrade.php
 @@ -0,0 +1,35 @@
@@ -57,14 +57,14 @@ index 0000000..fdfe40f
 +            SET     gr.rawgrade = gr.finalgrade
 +            WHERE   gi.id = gr.itemid AND gi.itemtype = 'manual' AND gr.rawgrade IS NULL";
 +    $DB->execute($sql);
-+    upgrade_plugin_savepoint(true, 2014051201, 'gradereport', 'grader');
++    upgrade_plugin_savepoint(true, 2016052301, 'gradereport', 'grader');
 +    return true;
 +}
 diff --git a/grade/report/grader/lib.php b/grade/report/grader/lib.php
-index c91394a..0c72a34 100644
+index adebe56..df63667 100644
 --- a/grade/report/grader/lib.php
 +++ b/grade/report/grader/lib.php
-@@ -945,6 +945,12 @@ class grade_report_grader extends grade_report {
+@@ -1036,6 +1036,11 @@ class grade_report_grader extends grade_report {
  
                  } else if ($USER->gradeediting[$this->courseid]) {
  
@@ -73,49 +73,41 @@ index c91394a..0c72a34 100644
 +                        $gradeval = $grade->rawgrade;
 +                    }
 +
-+
                      if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
-                         $scale = $scalesarray[$item->scaleid];
-                         $gradeval = (int)$gradeval; // scales use only integers
+                         $itemcell->attributes['class'] .= ' grade_type_scale';
+                     } else if ($item->gradetype == GRADE_TYPE_VALUE) {
 diff --git a/grade/report/grader/version.php b/grade/report/grader/version.php
-index 9b31002..354c9a9 100644
+index 6dc49c2..89b21e3 100644
 --- a/grade/report/grader/version.php
 +++ b/grade/report/grader/version.php
 @@ -24,6 +24,6 @@
  
  defined('MOODLE_INTERNAL') || die();
  
--$plugin->version   = 2014051200;        // The current plugin version (Date: YYYYMMDDXX)
-+$plugin->version   = 2014051201;        // The current plugin version (Date: YYYYMMDDXX)
- $plugin->requires  = 2014050800;        // Requires this Moodle version
+-$plugin->version   = 2016052300;        // The current plugin version (Date: YYYYMMDDXX)
++$plugin->version   = 2016052301;        // The current plugin version (Date: YYYYMMDDXX)
+ $plugin->requires  = 2016051900;        // Requires this Moodle version
  $plugin->component = 'gradereport_grader'; // Full name of the plugin (used for diagnostics)
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..68ec46c 100644
+index 838a2a3..fef172c 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
-@@ -689,6 +689,8 @@ $string['verbosescales'] = 'Verbose scales';
- $string['viewbygroup'] = 'Group';
- $string['viewgrades'] = 'View grades';
- $string['warningexcludedsum'] = 'Warning: excluding of grades is not compatible with sum aggregation.';
+@@ -818,6 +818,10 @@ $string['coursecateditable'] = 'Course category editable';
+ $string['coursecateditable_help'] = 'Disabling will make the course category name an uneditable field.';
+ $string['droplow_limit'] = 'Drop the lowest limit';
+ $string['droplow_limit_help'] = 'By applying this setting, the drop setting will be ignored until the number of droppable grades are > than the drop number.';
 +$string['manipulatecategories'] = 'Manipulate category totals';
 +$string['manipulatecategories_help'] = 'Curve and offset category totals';
- $string['weight'] = 'weight';
- $string['weightcourse'] = 'Use weighted grades for course';
- $string['weightedascending'] = 'Sort by weighted percent ascending';
-@@ -700,6 +702,8 @@ $string['weights'] = 'Weights';
- $string['weightsedit'] = 'Edit weights and extra credits';
- $string['weightuc'] = 'Weight';
- $string['writinggradebookinfo'] = 'Writing gradebook settings';
 +$string['gradeitemmanualrecompute'] = 'Manual item recompute';
 +$string['gradeitemmanualrecompute_help'] = 'Allow the gradebook to automatically adjust the raw grade boundaries when editing the real grade boundaries for Manual items.<br /><strong>When enabled, you will have the option of manipulating category totals.</strong>';
- $string['xml'] = 'XML';
- $string['yes'] = 'Yes';
- $string['yourgrade'] = 'Your grade';
+ 
+ // BEGIN LSU Better Letters
+ $string['letterscustompercents'] = 'Custom Percentages';
 diff --git a/lib/grade/grade_item.php b/lib/grade/grade_item.php
-index 3f8b273..05b9f26 100644
+index d7d0dec..8419d49 100644
 --- a/lib/grade/grade_item.php
 +++ b/lib/grade/grade_item.php
-@@ -702,6 +702,14 @@ class grade_item extends grade_object {
+@@ -758,6 +758,14 @@ class grade_item extends grade_object {
                      continue;
                  }
  
@@ -130,7 +122,22 @@ index 3f8b273..05b9f26 100644
                  $grade->finalgrade = $this->adjust_raw_grade($grade->rawgrade, $grade->rawgrademin, $grade->rawgrademax);
  
                  if (grade_floats_different($grade_record->finalgrade, $grade->finalgrade)) {
-@@ -967,7 +975,17 @@ class grade_item extends grade_object {
+@@ -804,9 +812,11 @@ class grade_item extends grade_object {
+ 
+             // Standardise score to the new grade range
+             // NOTE: skip if the activity provides a manual rescaling option.
+-            $manuallyrescale = (component_callback_exists('mod_' . $this->itemmodule, 'rescale_activity_grades') !== false);
+-            if (!$manuallyrescale && ($rawmin != $this->grademin or $rawmax != $this->grademax)) {
+-                $rawgrade = grade_grade::standardise_score($rawgrade, $rawmin, $rawmax, $this->grademin, $this->grademax);
++            if ($this->itemtype != 'manual') {
++                $manuallyrescale = (component_callback_exists('mod_' . $this->itemmodule, 'rescale_activity_grades') !== false);
++                if (!$manuallyrescale && ($rawmin != $this->grademin or $rawmax != $this->grademax)) {
++                    $rawgrade = grade_grade::standardise_score($rawgrade, $rawmin, $rawmax, $this->grademin, $this->grademax);
++                }
+             }
+ 
+             // Apply other grade_item factors
+@@ -1093,7 +1103,17 @@ class grade_item extends grade_object {
       * @return bool
       */
      public function is_raw_used() {
@@ -149,7 +156,7 @@ index 3f8b273..05b9f26 100644
      }
  
      /**
-@@ -1537,6 +1555,14 @@ class grade_item extends grade_object {
+@@ -1750,6 +1770,14 @@ class grade_item extends grade_object {
              return false;
          }
  
