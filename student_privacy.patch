@@ -1,45 +1,45 @@
 diff --git a/admin/settings/grades.php b/admin/settings/grades.php
-index 6d12d99..c9a200f 100644
+index 6760469..03610bf 100644
 --- a/admin/settings/grades.php
 +++ b/admin/settings/grades.php
-@@ -68,6 +68,8 @@ if (has_capability('moodle/grade:manage', $systemcontext)
+@@ -82,6 +82,8 @@ if (has_capability('moodle/grade:manage', $systemcontext)
  
          $temp->add(new admin_setting_special_gradelimiting());
  
 +        $temp->add(new admin_setting_configcheckbox('privacy_ack', new lang_string('privacy_ack', 'grades'), new lang_string('privacy_ack_help', 'grades'), 0));
 +
-         $temp->add(new admin_setting_special_gradepointmax());
- 
-         $temp->add(new admin_setting_special_gradepointdefault());
+         $temp->add(new admin_setting_configcheckbox('grade_report_showmin',
+                                                     get_string('minimum_show', 'grades'),
+                                                     get_string('minimum_show_help', 'grades'), '1'));
 diff --git a/grade/export/grade_export_form.php b/grade/export/grade_export_form.php
-index 1772b0a..31d1dda 100644
+index 65212dd..3244891 100644
 --- a/grade/export/grade_export_form.php
 +++ b/grade/export/grade_export_form.php
-@@ -153,6 +153,12 @@ class grade_export_form extends moodleform {
-             }
+@@ -191,6 +191,12 @@ class grade_export_form extends moodleform {
+             $mform->disabledIf('validuntil', 'key', 'noteq', 1);
          }
  
 +        if($CFG->privacy_ack) {
 +            $mform->addElement('header', 'privacy_ack_header', get_string('privacy_ack', 'grades'));
 +            $mform->addElement('checkbox', 'privacy_ack_required', null, get_string('privacy_ack_required', 'grades'));
-+            $mform->addRule('privacy_ack_required', get_string('missing_privacy_ack_required', 'grades'), 'required');
++            $mform->addRule('privacy_ack_required', get_string('missing_privacy_ack_required', 'grades'), 'required', NULL, 'client');
 +        }
 +
          $mform->addElement('hidden', 'id', $COURSE->id);
          $mform->setType('id', PARAM_INT);
-         $this->add_action_buttons(false, get_string('submit'));
+         $submitstring = get_string('download');
 diff --git a/lang/en/grades.php b/lang/en/grades.php
-index 9ea00eb..066a432 100644
+index b86532d..32b79bb 100644
 --- a/lang/en/grades.php
 +++ b/lang/en/grades.php
-@@ -689,6 +689,10 @@ $string['verbosescales'] = 'Verbose scales';
- $string['viewbygroup'] = 'Group';
- $string['viewgrades'] = 'View grades';
- $string['warningexcludedsum'] = 'Warning: excluding of grades is not compatible with sum aggregation.';
+@@ -824,6 +824,10 @@ $string['gradeitemmanualrecompute'] = 'Manual item recompute';
+ $string['gradeitemmanualrecompute_help'] = 'Allow the gradebook to automatically adjust the raw grade boundaries when editing the real grade boundaries for Manual items.<br /><strong>When enabled, you will have the option of manipulating category totals.</strong>';
+ $string['w_ec'] = 'Weighted ' . $string['aggregationcoefextra'];
+ $string['w_ec_help'] = 'By default, '.$string['aggregationcoefextra'].' items in either the '.$string['aggregateweightedmean2'].' or '.$string['aggregatesum'].' grade categories are weighted. Uncheck this option to allow extra credit items to simply add points to the aggregated category total.';
 +$string['privacy_ack'] = 'Student privacy';
 +$string['privacy_ack_help'] = 'This setting blocks anyone from downloading student grades without confirming they will comply with all laws and policies regarding student rights.';
 +$string['privacy_ack_required'] = 'I understand that I am downloading legally protected student data and will comply with all laws and policies related to the protection of student data.';
-+$string['missing_privacy_ack_required'] = '<strong>Please agree to the requirements below before downloading any student data.</strong>';
- $string['weight'] = 'weight';
- $string['weightcourse'] = 'Use weighted grades for course';
- $string['weightedascending'] = 'Sort by weighted percent ascending';
++$string['missing_privacy_ack_required'] = 'Please agree to the requirements below before downloading any student data.';
+ 
+ // BEGIN LSU Better Letters
+ $string['letterscustompercents'] = 'Custom Percentages';
